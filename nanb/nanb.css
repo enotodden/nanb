@@ -1,0 +1,245 @@
+MarkdownH1 {
+    background: $surface 0%;
+    border: none;
+    border-bottom: wide $foreground;
+    content-align: center middle;
+    padding-top: 1;
+    padding-bottom: 1;
+    margin-bottom: 2;
+    text-style: bold;
+    color: $text;
+}
+MarkdownH2 {
+    background: $panel 0%;
+    border: none;
+    border-bottom: wide $foreground;
+    text-align: left;
+    text-style: bold underline;
+    color: $text;
+    padding-top: 1;
+    padding-right: 100;
+}
+MarkdownH3 {
+    background: $surface 0%;
+    text-style: bold;
+    color: $text;
+    border-bottom: wide $foreground;
+    width: auto;
+}
+MarkdownH4 {
+    text-style: underline;
+    margin: 1 0;
+}
+
+MarkdownH5 {
+    text-style: bold;
+    color: $text;
+    margin: 1 0;
+}
+
+MarkdownH6 {
+    text-style: bold;
+    color: $text-muted;
+    margin: 1 0;
+}
+
+    MarkdownHorizontalRule {
+    border-bottom: heavy $primary;
+    height: 1;
+    padding-top: 1;
+    margin-bottom: 1;
+}
+
+Markdown > MarkdownParagraph {
+     margin: 0 0 1 0;
+}
+
+MarkdownBlockQuote {
+    background: $boost;
+    border-left: outer $success;
+    margin: 1 0;
+    padding: 0 1;
+}
+MarkdownBlockQuote > BlockQuote {
+    margin-left: 2;
+    margin-top: 1;
+}
+
+MarkdownList {
+    width: 1fr;
+}
+
+MarkdownList MarkdownList {
+    margin: 0;
+    padding-top: 0;
+}
+
+
+MarkdownBulletList {
+    margin: 0 0 1 0;
+    padding: 0 0;
+}
+
+MarkdownBulletList Horizontal {
+    height: auto;
+    width: 1fr;
+}
+
+MarkdownBulletList Vertical {
+    height: auto;
+    width: 1fr;
+}
+
+
+MarkdownOrderedList {
+    margin: 0 0 1 0;
+    padding: 0 0;
+}
+
+MarkdownOrderedList Horizontal {
+    height: auto;
+    width: 1fr;
+}
+
+MarkdownOrderedList Vertical {
+    height: auto;
+    width: 1fr;
+}
+
+
+MarkdownTableContent {
+    width: 100%;
+    height: auto;
+
+}
+
+MarkdownTableContent > .markdown-table--header {
+    text-style: bold;
+}
+
+MarkdownTable {
+    width: 100%;
+    margin: 1 0;
+    background: $panel;
+    border: wide $background;
+}
+
+MarkdownBullet {
+    width: auto;
+    color: $success;
+    text-style: bold;
+}
+
+MarkdownListItem {
+    layout: horizontal;
+    margin-right: 1;
+    height: auto;
+}
+
+MarkdownListItem > Vertical {
+    width: 1fr;
+    height: auto;
+}
+
+MarkdownFence {
+    margin: 1 0;
+    overflow: auto;
+    width: 100%;
+    height: auto;
+    max-height: 20;
+    color: rgb(210,210,210);
+}
+
+MarkdownFence > * {
+    width: auto;
+}
+
+Markdown {
+    height: auto;
+    margin: 0 4 1 4;
+    layout: vertical;
+}
+.em {
+    text-style: italic;
+}
+.strong {
+    text-style: bold;
+}
+.s {
+    text-style: strike;
+}
+.code_inline {
+    text-style: bold dim;
+}
+
+
+
+
+Screen {
+    background: $panel;
+}
+
+#app-grid {
+    layout: grid;
+    grid-size: 2;  /* two columns */
+    grid-columns: 30% 70%;
+    grid-rows: 1fr;
+    grid-gutter: 1;
+    margin: 1;
+}
+
+#notebook {
+    width: 100%;
+    height: 100%;
+    row-span: 2;
+    scrollbar-gutter: stable;
+}
+
+.segment {
+    height: auto;
+    background: $background;
+    margin-bottom: 1;
+    border: round $background;
+}
+.segment:focus{
+    border: round green;
+}
+.segment.last {
+    margin-bottom: 0;
+}
+
+.celllabel {
+    text-align: right;
+    text-style: italic;
+    height: 2;
+    width: 100%;
+}
+
+.codecell, .markdowncell {
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 1;
+}
+
+#output {
+    height: 100%;
+    scrollbar-gutter: stable;
+}
+
+#bottom-right {
+    height: 100%;
+    layout: grid;
+    grid-size: 3;
+    grid-columns: 1fr;
+    grid-rows: 1fr;
+    grid-gutter: 1;
+}
+
+#bottom-right-final {
+    column-span: 2;
+}
+
+#bottom-right > Static {
+    height: 100%;
+}
+

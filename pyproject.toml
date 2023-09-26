@@ -1,0 +1,24 @@
+[project]
+name = "nanb"
+version = "0.0.1"
+authors = [
+  { name="Espen Notodden", email="espen@enotodden.com" },
+]
+description = "Not A NoteBook"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/enotodden/nanb"
+"Bug Tracker" = "https://github.com/enotodden/nanb/issues"
+
+[project.scripts]
+nanb="nanb.main:main"
+
+[tool.setuptools.package-data]
+nanb = ["*.css"]
