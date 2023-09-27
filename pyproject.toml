@@ -1,6 +1,6 @@
 [project]
 name = "nanb"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="Espen Notodden", email="espen@enotodden.com" },
 ]
@@ -12,6 +12,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dynamic = ["dependencies"]
 
 [project.urls]
 "Homepage" = "https://github.com/enotodden/nanb"
@@ -22,3 +23,6 @@ nanb="nanb.main:main"
 
 [tool.setuptools.package-data]
 nanb = ["*.css"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
