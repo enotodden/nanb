@@ -11,6 +11,7 @@ import textual
 import textual.app
 import rich
 import rich.markdown
+import rich.spinner
 from textual.reactive import reactive
 
 from nanb.cell import Cell, MarkdownCell, CodeCell
@@ -63,6 +64,11 @@ def split_to_cells(source) -> [Cell]:
 
     return cells
 
+def load_file(filename: str) -> [Cell]:
+    with open(filename, "r") as f:
+        return split_to_cells(f.read())
+
+
 class TUICellSegment(textual.widget.Widget):
     can_focus = True
     focusable = True
@@ -98,7 +104,7 @@ class TUICellSegment(textual.widget.Widget):
                 "python",
                 line_numbers=True,
                 start_line=self.cell.line_start,
-                word_wrap=False,
+                word_wrap=True,
                 indent_guides=True,
                 theme="github-dark",
             ), classes='codecell', id=f"cell_{self.idx}")
@@ -114,7 +120,150 @@ class TUICellSegment(textual.widget.Widget):
         if self.label:
             self.label.update(self.make_label_text())
 
+class Cells(textual.containers.VerticalScroll):
+
+    cells = textual.reactive.var([])
+
+    def __init__(self, cells, **kwargs):
+        self.cells = cells
+        super().__init__(**kwargs)
+
+    def make_widgets(self):
+        widgets = []
+        for i, cell in enumerate(self.cells):
+            classes = "segment"
+            if i == len(self.cells)-1:
+                classes += " last"
+            w = TUICellSegment(i, cell, classes=classes, id=f"segment_{i}")
+            w.on_clicked = self.on_segment_clicked
+            widgets.append(w)
+        return widgets
+
+    def compose(self) -> textual.app.ComposeResult:
+        widgets = self.make_widgets()
+        self.widgets = widgets
+        for w in widgets:
+            yield w
+
+    def on_segment_clicked(self, w):
+        self.currently_focused = w.idx
+        self.widgets[self.currently_focused].focus()
+        self.on_output(w.output_text)
+
+    def on_mount(self):
+        self.currently_focused = 0
+        self.widgets[self.currently_focused].focus()
+
+    async def on_key(self, event: textual.events.Key) -> None:
+        if event.key == "up":
+            if self.currently_focused > 0:
+                self.currently_focused -= 1
+                w = self.widgets[self.currently_focused]
+                w.focus()
+                self.on_output(w.output_text)
+        elif event.key == "down":
+            if self.currently_focused < len(self.widgets) - 1:
+                self.currently_focused += 1
+                w = self.widgets[self.currently_focused]
+                w.focus()
+                self.on_output(w.output_text)
+
+        if event.key == "enter":
+            self.on_run_code(self.widgets[self.currently_focused])
+
+    @property
+    def current(self):
+        if self.currently_focused is None:
+            return None
+        return self.widgets[self.currently_focused]
+
+    def clear(self):
+        q = self.query(".segment")
+        await_remove = q.remove()
+        self.currently_focused = None
+        return await_remove
+
+    async def refresh_cells(self, cells):
+        self.cells = cells
+        self.widgets = self.make_widgets()
+        await self.clear()
+        self.mount(*self.widgets)
+        self.currently_focused = 0
+        self.widgets[self.currently_focused].focus()
+
+
+
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
+
+
+class ServerManager:
+
+    def __init__(self, server_log_file):
+        self.socket_file = None
+        self.server_log_file = server_log_file
+
+    def start(self):
+        socket_uuid = uuid.uuid4().hex
+        self.socket_file = "/tmp/nanb_socket_" + socket_uuid
+
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        self.server = subprocess.Popen([
+                sys.executable,
+                "-m",
+                "nanb.server",
+                "--socket-file",
+                self.socket_file
+            ],
+            stdout=self.server_log_file,
+            stderr=self.server_log_file,
+            env=env
+        )
+
+        # Wait until the server comes up and starts listening
+        while True:
+            if os.path.exists(self.socket_file):
+                break
+            time.sleep(0.1)
+
+    def stop(self):
+        server.terminate()
+        server.wait()
+
+    def restart(self):
+        self.stop()
+        self.start()
+
+class SpinnerWidget(textual.widgets.Static):
+    """
+    Spinner that will start and stop based on wether code is running
+
+    Borrowed from this lovely blog post by Rodrigo Girão Serrão:
+        https://textual.textualize.io/blog/2022/11/24/spinners-and-progress-bars-in-textual/
+    """
+    DEFAULT_CSS = """
+    SpinnerWidget {
+        content-align: right middle;
+        margin-right: 2;
+        height: auto;
+    }
+    """
+    def __init__(self, style: str, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.style = style
+        self._renderable_object = rich.spinner.Spinner(style)
+
+    def update_rendering(self) -> None:
+        self.update(self._renderable_object)
+
+    def on_mount(self) -> None:
+        self.interval_update = self.set_interval(1 / 60, self.update_rendering)
+
+    def pause(self) -> None:
+        self.interval_update.pause()
+
+    def resume(self) -> None:
+        self.interval_update.resume()
 
 class App(textual.app.App):
 
@@ -128,93 +277,93 @@ class App(textual.app.App):
         self.cells = cells
         self.client = client
         self.filename = filename
+        self.task_queue = asyncio.Queue()
 
-    def on_segment_clicked(self, w):
-        self.currently_focused = w.idx
-        self.widgets[self.currently_focused].focus()
+    def on_output(self, text):
         self.output.clear()
-        self.output.write(w.output_text)
+        self.output.write(text)
+
+    def on_mount(self):
+        self.spinner.pause()
 
     def compose(self) -> textual.app.ComposeResult:
-        widgets = []
+        self.spinner = SpinnerWidget("point", id="spin")
+        yield self.spinner
         with textual.containers.Container(id="app-grid"):
-            with textual.containers.VerticalScroll(id="notebook"):
-                for i, cell in enumerate(self.cells):
-                    classes = "segment"
-                    if i == len(self.cells)-1:
-                        classes += " last"
-                    w = TUICellSegment(i, cell, classes=classes, id=f"segment_{i}")
-                    w.on_clicked = self.on_segment_clicked
-                    widgets.append(w)
-                    yield w
+            self.cellsw = Cells(self.cells, id="cells")
+            self.cellsw.on_output = self.on_output
+            self.cellsw.on_run_code = self.run_code
+            yield self.cellsw
             with textual.containers.Container(id="output"):
+
                 self.output = textual.widgets.Log()
                 self.output.on_click = lambda self: self.focus()
                 yield self.output
-        self.widgets = widgets
 
+        loop = asyncio.get_event_loop()
+        self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
 
-    def on_mount(self):
-        self.currently_focused = 0
-        self.widgets[self.currently_focused].focus()
+    async def process_task_queue(self):
+        while True:
+            w = await self.task_queue.get()
+            loop = asyncio.get_event_loop()
+            #w = self.widgets[self.currently_focused]
+            w.output_text = ""
+            w.state = "RUNNING"
+            # create task
+            q = asyncio.Queue()
+            task = loop.create_task(self.client.run_code(w.cell.line_start, w.cell.source, q))
+
+            started = False
+
+            self.spinner.resume()
+            while not task.done():
+                try:
+                    result = await asyncio.wait_for(q.get(), timeout=0.2)
+                    if not result:
+                        continue
+                    if not started:
+                        started = True
+                        w.output_text = ""
+                        w.state = "RUNNING"
+                    w.output_text += result
+
+                    self.output.clear()
+                    if self.cellsw.current:
+                        self.output.write(self.cellsw.current.output_text)
+
+                except asyncio.TimeoutError:
+                    pass
+            self.spinner.pause()
+            w.state = ""
 
     @textual.work()
-    async def run_code(self):
-        loop = asyncio.get_event_loop()
-        w = self.widgets[self.currently_focused]
+    async def run_code(self, w):
         if w.cell.cell_type != "code":
             return
-        w.output_text = ""
         w.state = "PENDING"
-        # create task
-        q = asyncio.Queue()
-        task = loop.create_task(self.client.run_code(w.cell.line_start, w.cell.source, q))
+        await self.task_queue.put(w)
 
-        started = False
-
-        while not task.done():
-            print("waiting for task")
+    def clear_task_queue(self):
+        while not self.task_queue.empty():
             try:
-                result = await asyncio.wait_for(q.get(), timeout=0.2)
-                if not result:
-                    continue
-                if not started:
-                    started = True
-                    w.output_text = ""
-                    w.state = "RUNNING"
-                w.output_text+=result
-
-                wcur = self.widgets[self.currently_focused]
-                self.output.clear()
-                self.output.write(wcur.output_text)
-            except asyncio.TimeoutError:
+                self.task_queue.get_nowait()
+            except asyncio.QueueEmpty:
                 pass
 
-        w.state = ""
-
-    async def on_key(self, event: textual.events.Key) -> None:
-        if event.key == "up":
-            if self.currently_focused > 0:
-                self.currently_focused -= 1
-                w = self.widgets[self.currently_focused]
-                w.focus()
-                self.output.clear()
-                self.output.write(w.output_text)
-        elif event.key == "down":
-            if self.currently_focused < len(self.widgets) - 1:
-                self.currently_focused += 1
-                w = self.widgets[self.currently_focused]
-                w.focus()
-                self.output.clear()
-                self.output.write(w.output_text)
-        if event.key == "enter":
-            self.run_code()
+     # This is just a placeholder for what we want to do later on file
+     # reload
+#    async def on_key(self, event: textual.events.Key) -> None:
+#        if event.key == "u":
+#            await self.cellsw.refresh_cells(self.cells)
+#            self.output.write(self.cellsw.current.output_text)
+#            self.clear_task_queue()
 
 
 def main():
     argp = argparse.ArgumentParser()
     argp.add_argument("-c", "--config-dir", default=os.path.join(os.path.expanduser("~"), ".nanb"))
-    argp.add_argument("-L", "--server-log-file", default="/tmp/nanb_server.log")
+    argp.add_argument("-L", "--server-log-file", default="nanb_server.log")
 
     subp = argp.add_subparsers(dest='command', required=True)
 

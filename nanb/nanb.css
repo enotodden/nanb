@@ -186,15 +186,9 @@ Screen {
     grid-rows: 1fr;
     grid-gutter: 1;
     margin: 1;
-}
-
-#notebook {
-    width: 100%;
-    height: 100%;
     row-span: 2;
     scrollbar-gutter: stable;
 }
-
 .segment {
     height: auto;
     background: $background;
@@ -242,4 +236,3 @@ Screen {
 #bottom-right > Static {
     height: 100%;
 }
-

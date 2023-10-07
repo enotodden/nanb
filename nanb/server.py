@@ -108,10 +108,12 @@ class Runtime:
                     self.interpreter.runsource(last, symbol='exec')
 
 
+RUNTIME = Runtime()
+
 
 class ServerHandler(socketserver.StreamRequestHandler):
     def __init__(self, *args, **kwargs):
-        self.runtime = Runtime()
+        self.runtime = RUNTIME
         super().__init__(*args, **kwargs)
 
     def on_output(self, output):
@@ -123,6 +125,7 @@ class ServerHandler(socketserver.StreamRequestHandler):
         self.runtime.run_code(line_start, source, outfile)
 
     def handle(self):
+        print("Connection opened")
         try:
             header_data = self.rfile.readline().decode().strip()
             if not header_data:
