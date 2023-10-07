@@ -14,6 +14,8 @@ import rich.markdown
 import rich.spinner
 from textual.reactive import reactive
 
+from watchfiles import awatch
+
 from nanb.cell import Cell, MarkdownCell, CodeCell
 from nanb.config import Config, read_config
 from nanb.client import UnixDomainClient
@@ -302,6 +304,7 @@ class App(textual.app.App):
 
         loop = asyncio.get_event_loop()
         self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
+        self.watch_sourcefile_task = asyncio.create_task(self.watch_sourcefile())
 
     async def process_task_queue(self):
         while True:
@@ -337,6 +340,21 @@ class App(textual.app.App):
             self.spinner.pause()
             w.state = ""
 
+    async def watch_sourcefile(self):
+        async for changes in awatch(self.filename):
+            for change, _ in changes:
+                if change == 2:
+                    await self.reload_source()
+
+    async def reload_source(self):
+        with open(self.filename) as f:
+            source = f.read()
+            cells = split_to_cells(source)
+            self.cells = cells
+            await self.cellsw.refresh_cells(self.cells)
+            self.output.write(self.cellsw.current.output_text)
+            self.clear_task_queue()
+
     @textual.work()
     async def run_code(self, w):
         if w.cell.cell_type != "code":
@@ -350,14 +368,6 @@ class App(textual.app.App):
                 self.task_queue.get_nowait()
             except asyncio.QueueEmpty:
                 pass
-
-     # This is just a placeholder for what we want to do later on file
-     # reload
-#    async def on_key(self, event: textual.events.Key) -> None:
-#        if event.key == "u":
-#            await self.cellsw.refresh_cells(self.cells)
-#            self.output.write(self.cellsw.current.output_text)
-#            self.clear_task_queue()
 
 
 def main():
