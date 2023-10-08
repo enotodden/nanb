@@ -20,6 +20,8 @@ from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
 from nanb.config import Config, read_config
 from nanb.client import UnixDomainClient
 
+from nanb.widgets import MarkdownSegment, CodeSegment, Spinner, Output
+
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def split_to_cells(source) -> [Cell]:
@@ -70,56 +72,6 @@ def load_file(filename: str) -> [Cell]:
     with open(filename, "r") as f:
         return split_to_cells(f.read())
 
-class TUICellSegment(textual.widget.Widget):
-    can_focus = True
-    focusable = True
-
-    output_text = textual.reactive.var("")
-    state = textual.reactive.var("")
-    cell = textual.reactive.var(None)
-
-    def __init__(self, idx:int, cell: Cell, **kwargs):
-        self.idx = idx
-        self.cell = cell
-        self.label = None
-        super().__init__(**kwargs)
-
-    def make_label_text(self):
-        state = self.state
-        if state != "":
-            state = f" - [{state}]"
-        if self.cell.name is not None:
-            cellname = self.cell.name
-            if len(cellname) > 20:
-                cellname = cellname[:20] + "..."
-            return f"{cellname} - {self.idx+1}{state}"
-        return f"{self.idx+1}{state}"
-
-    def compose(self) -> textual.app.ComposeResult:
-        self.label = textual.widgets.Label(self.make_label_text(), classes="celllabel")
-        if self.cell.cell_type == "markdown":
-            self.content = textual.widgets.Markdown(self.cell.source, classes='markdowncell', id=f"cell_{self.idx}")
-        elif self.cell.cell_type == "code":
-            self.content = textual.widgets.Static(renderable=rich.syntax.Syntax(
-                self.cell.source,
-                "python",
-                line_numbers=True,
-                start_line=self.cell.line_start,
-                word_wrap=True,
-                indent_guides=True,
-                theme="github-dark",
-            ), classes='codecell', id=f"cell_{self.idx}")
-        yield self.label
-        yield self.content
-
-    def on_click(self, event: textual.events.Click) -> None:
-        self.focus()
-        if getattr(self, "on_clicked", None):
-            self.on_clicked(self)
-
-    def watch_state(self, value):
-        if self.label:
-            self.label.update(self.make_label_text())
 
 class Cells(textual.containers.VerticalScroll):
 
@@ -135,7 +87,10 @@ class Cells(textual.containers.VerticalScroll):
             classes = "segment"
             if i == len(self.cells)-1:
                 classes += " last"
-            w = TUICellSegment(i, cell, classes=classes, id=f"segment_{i}")
+            if cell.cell_type == "markdown":
+                w = MarkdownSegment(i, cell, classes=classes, id=f"segment_{i}")
+            elif cell.cell_type == "code":
+                w = CodeSegment(i, cell, classes=classes, id=f"segment_{i}")
             w.on_clicked = self.on_segment_clicked
             widgets.append(w)
         return widgets
@@ -149,7 +104,7 @@ class Cells(textual.containers.VerticalScroll):
     def on_segment_clicked(self, w):
         self.currently_focused = w.idx
         self.widgets[self.currently_focused].focus()
-        self.on_output(w.cell.output)
+        self.on_output(w.cell)
 
     def on_mount(self):
         self.currently_focused = 0
@@ -161,13 +116,13 @@ class Cells(textual.containers.VerticalScroll):
                 self.currently_focused -= 1
                 w = self.widgets[self.currently_focused]
                 w.focus()
-                self.on_output(w.cell.output)
+                self.on_output(w.cell)
         elif event.key == "down":
             if self.currently_focused < len(self.widgets) - 1:
                 self.currently_focused += 1
                 w = self.widgets[self.currently_focused]
                 w.focus()
-                self.on_output(w.cell.output)
+                self.on_output(w.cell)
         if event.key == "enter":
             self.on_run_code(self.widgets[self.currently_focused])
 
@@ -231,37 +186,6 @@ class ServerManager:
         self.stop()
         self.start()
 
-class SpinnerWidget(textual.widgets.Static):
-    """
-    Spinner that will start and stop based on wether code is running
-
-    Borrowed from this lovely blog post by Rodrigo Girão Serrão:
-        https://textual.textualize.io/blog/2022/11/24/spinners-and-progress-bars-in-textual/
-    """
-    DEFAULT_CSS = """
-    SpinnerWidget {
-        content-align: right middle;
-        height: auto;
-        padding-right: 1;
-    }
-    """
-    def __init__(self, style: str, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.style = style
-        self._renderable_object = rich.spinner.Spinner(style)
-
-    def update_rendering(self) -> None:
-        self.update(self._renderable_object)
-
-    def on_mount(self) -> None:
-        self.interval_update = self.set_interval(1 / 60, self.update_rendering)
-
-    def pause(self) -> None:
-        self.interval_update.pause()
-
-    def resume(self) -> None:
-        self.interval_update.resume()
-
 class App(textual.app.App):
 
     def __init__(self, config: Config, cells, client, filename, *args, **kwargs):
@@ -276,15 +200,14 @@ class App(textual.app.App):
         self.filename = filename
         self.task_queue = asyncio.Queue()
 
-    def on_output(self, text):
-        self.output.clear()
-        self.output.write(text)
+    def on_output(self, cell: Cell):
+        self.output.use_cell(cell)
 
     def on_mount(self):
         self.spinner.pause()
 
     def compose(self) -> textual.app.ComposeResult:
-        self.spinner = SpinnerWidget("point", id="spin")
+        self.spinner = Spinner(id="spin")
         yield self.spinner
         with textual.containers.Container(id="app-grid"):
             self.cellsw = Cells(self.cells, id="cells")
@@ -292,8 +215,7 @@ class App(textual.app.App):
             self.cellsw.on_run_code = self.run_code
             yield self.cellsw
             with textual.containers.Container(id="output"):
-                self.output = textual.widgets.Log()
-                self.output.on_click = lambda self: self.focus()
+                self.output = Output()
                 yield self.output
 
         loop = asyncio.get_event_loop()
@@ -324,9 +246,7 @@ class App(textual.app.App):
                         w.state = "RUNNING"
                     w.cell.output += result
 
-                    self.output.clear()
-                    if self.cellsw.current:
-                        self.output.write(self.cellsw.current.cell.output)
+                    self.output.use_cell(self.cellsw.current.cell)
 
                 except asyncio.TimeoutError:
                     pass
@@ -347,8 +267,7 @@ class App(textual.app.App):
                 match_cells(self.cells, new_cells)
                 self.cells = new_cells
                 await self.cellsw.refresh_cells(self.cells)
-                self.output.clear()
-                self.output.write(self.cellsw.current.cell.output)
+                self.output.use_cell(self.cellsw.current.cell)
                 self.clear_task_queue()
             except Exception as exc:
                 print(exc)
