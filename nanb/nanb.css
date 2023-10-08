@@ -182,7 +182,7 @@ Screen {
 #app-grid {
     layout: grid;
     grid-size: 2;  /* two columns */
-    grid-columns: 30% 70%;
+    grid-columns: 40% 60%;
     grid-rows: 1fr;
     grid-gutter: 1;
     row-span: 2;
@@ -203,14 +203,14 @@ Screen {
 .celllabel {
     text-align: right;
     text-style: italic;
-    height: 2;
+    height: 1;
     width: 100%;
 }
 
 .codecell, .markdowncell {
     padding-left: 0;
     padding-right: 0;
-    padding-bottom: 1;
+    padding-bottom: 0;
 }
 
 #output {

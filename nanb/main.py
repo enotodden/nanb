@@ -70,7 +70,6 @@ def load_file(filename: str) -> [Cell]:
     with open(filename, "r") as f:
         return split_to_cells(f.read())
 
-
 class TUICellSegment(textual.widget.Widget):
     can_focus = True
     focusable = True
@@ -293,9 +292,6 @@ class App(textual.app.App):
             self.cellsw.on_run_code = self.run_code
             yield self.cellsw
             with textual.containers.Container(id="output"):
-
-
-
                 self.output = textual.widgets.Log()
                 self.output.on_click = lambda self: self.focus()
                 yield self.output
@@ -308,10 +304,9 @@ class App(textual.app.App):
         while True:
             w = await self.task_queue.get()
             loop = asyncio.get_event_loop()
-            #w = self.widgets[self.currently_focused]
             w.cell.output = ""
             w.state = "RUNNING"
-            # create task
+
             q = asyncio.Queue()
             task = loop.create_task(self.client.run_code(w.cell.line_start, w.cell.source, q))
 
