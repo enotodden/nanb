@@ -185,9 +185,7 @@ Screen {
     grid-columns: 30% 70%;
     grid-rows: 1fr;
     grid-gutter: 1;
-    margin: 1;
     row-span: 2;
-    scrollbar-gutter: stable;
 }
 .segment {
     height: auto;
@@ -218,6 +216,11 @@ Screen {
 #output {
     height: 100%;
     scrollbar-gutter: stable;
+}
+
+#output Log {
+    padding-left: 1;
+    padding-top: 1;
 }
 
 #bottom-right {

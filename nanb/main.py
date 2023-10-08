@@ -16,7 +16,7 @@ from textual.reactive import reactive
 
 from watchfiles import awatch
 
-from nanb.cell import Cell, MarkdownCell, CodeCell
+from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
 from nanb.config import Config, read_config
 from nanb.client import UnixDomainClient
 
@@ -150,7 +150,7 @@ class Cells(textual.containers.VerticalScroll):
     def on_segment_clicked(self, w):
         self.currently_focused = w.idx
         self.widgets[self.currently_focused].focus()
-        self.on_output(w.output_text)
+        self.on_output(w.cell.output)
 
     def on_mount(self):
         self.currently_focused = 0
@@ -162,14 +162,13 @@ class Cells(textual.containers.VerticalScroll):
                 self.currently_focused -= 1
                 w = self.widgets[self.currently_focused]
                 w.focus()
-                self.on_output(w.output_text)
+                self.on_output(w.cell.output)
         elif event.key == "down":
             if self.currently_focused < len(self.widgets) - 1:
                 self.currently_focused += 1
                 w = self.widgets[self.currently_focused]
                 w.focus()
-                self.on_output(w.output_text)
-
+                self.on_output(w.cell.output)
         if event.key == "enter":
             self.on_run_code(self.widgets[self.currently_focused])
 
@@ -193,10 +192,7 @@ class Cells(textual.containers.VerticalScroll):
         self.currently_focused = 0
         self.widgets[self.currently_focused].focus()
 
-
-
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
-
 
 class ServerManager:
 
@@ -246,8 +242,8 @@ class SpinnerWidget(textual.widgets.Static):
     DEFAULT_CSS = """
     SpinnerWidget {
         content-align: right middle;
-        margin-right: 2;
         height: auto;
+        padding-right: 1;
     }
     """
     def __init__(self, style: str, **kwargs) -> None:
@@ -298,6 +294,8 @@ class App(textual.app.App):
             yield self.cellsw
             with textual.containers.Container(id="output"):
 
+
+
                 self.output = textual.widgets.Log()
                 self.output.on_click = lambda self: self.focus()
                 yield self.output
@@ -311,7 +309,7 @@ class App(textual.app.App):
             w = await self.task_queue.get()
             loop = asyncio.get_event_loop()
             #w = self.widgets[self.currently_focused]
-            w.output_text = ""
+            w.cell.output = ""
             w.state = "RUNNING"
             # create task
             q = asyncio.Queue()
@@ -327,13 +325,13 @@ class App(textual.app.App):
                         continue
                     if not started:
                         started = True
-                        w.output_text = ""
+                        w.cell.output = ""
                         w.state = "RUNNING"
-                    w.output_text += result
+                    w.cell.output += result
 
                     self.output.clear()
                     if self.cellsw.current:
-                        self.output.write(self.cellsw.current.output_text)
+                        self.output.write(self.cellsw.current.cell.output)
 
                 except asyncio.TimeoutError:
                     pass
@@ -348,12 +346,18 @@ class App(textual.app.App):
 
     async def reload_source(self):
         with open(self.filename) as f:
-            source = f.read()
-            cells = split_to_cells(source)
-            self.cells = cells
-            await self.cellsw.refresh_cells(self.cells)
-            self.output.write(self.cellsw.current.output_text)
-            self.clear_task_queue()
+            try:
+                source = f.read()
+                new_cells = split_to_cells(source)
+                match_cells(self.cells, new_cells)
+                self.cells = new_cells
+                await self.cellsw.refresh_cells(self.cells)
+                self.output.clear()
+                self.output.write(self.cellsw.current.cell.output)
+                self.clear_task_queue()
+            except Exception as exc:
+                print(exc)
+                self.exit(1)
 
     @textual.work()
     async def run_code(self, w):

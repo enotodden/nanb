@@ -1,3 +1,5 @@
+import hashlib
+
 class Cell:
     cell_type = None
 
@@ -5,7 +7,7 @@ class Cell:
         self.source = source
         self.line_start = line_start
         self.line_end = line_end
-        self.current_output = ""
+        self.output = ""
         self.name = cell_name
 
     def __str__(self):
@@ -15,8 +17,19 @@ class Cell:
     def __repr__(self):
         return str(self)
 
+    def id(self):
+        hash_input = self.source.strip()
+        return hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
+
 class MarkdownCell(Cell):
     cell_type = "markdown"
 
 class CodeCell(Cell):
     cell_type = "code"
+
+def match_cells(old_cells: [Cell], new_cells: [Cell]):
+    for nc in new_cells:
+        for oc in old_cells:
+            if nc.id() == oc.id():
+                nc.output = oc.output
+                break
