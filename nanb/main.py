@@ -95,6 +95,20 @@ class Cells(textual.containers.VerticalScroll):
             widgets.append(w)
         return widgets
 
+    def focus_cell(self, cell: Cell):
+        for i, w in enumerate(self.widgets):
+            if w.cell == cell:
+                self.currently_focused = i
+                w.focus()
+                self.on_output(w.cell)
+                break
+
+    def focus_widget(self, w):
+        self.focus_cell(w.cell)
+
+    def focus_idx(self, idx):
+        self.focus_cell(self.cells[idx])
+
     def compose(self) -> textual.app.ComposeResult:
         widgets = self.make_widgets()
         self.widgets = widgets
@@ -102,27 +116,18 @@ class Cells(textual.containers.VerticalScroll):
             yield w
 
     def on_segment_clicked(self, w):
-        self.currently_focused = w.idx
-        self.widgets[self.currently_focused].focus()
-        self.on_output(w.cell)
+        self.focus_widget(w)
 
     def on_mount(self):
-        self.currently_focused = 0
-        self.widgets[self.currently_focused].focus()
+        self.focus_idx(0)
 
     async def on_key(self, event: textual.events.Key) -> None:
         if event.key == "up":
             if self.currently_focused > 0:
-                self.currently_focused -= 1
-                w = self.widgets[self.currently_focused]
-                w.focus()
-                self.on_output(w.cell)
+                self.focus_idx(self.currently_focused - 1)
         elif event.key == "down":
             if self.currently_focused < len(self.widgets) - 1:
-                self.currently_focused += 1
-                w = self.widgets[self.currently_focused]
-                w.focus()
-                self.on_output(w.cell)
+                self.focus_idx(self.currently_focused + 1)
         if event.key == "enter":
             self.on_run_code(self.widgets[self.currently_focused])
 
@@ -143,8 +148,7 @@ class Cells(textual.containers.VerticalScroll):
         self.widgets = self.make_widgets()
         await self.clear()
         self.mount(*self.widgets)
-        self.currently_focused = 0
-        self.widgets[self.currently_focused].focus()
+        self.focus_idx(0)
 
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
 
@@ -247,7 +251,6 @@ class App(textual.app.App):
                     w.cell.output += result
 
                     self.output.use_cell(self.cellsw.current.cell)
-
                 except asyncio.TimeoutError:
                     pass
             self.spinner.pause()

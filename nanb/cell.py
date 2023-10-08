@@ -1,3 +1,4 @@
+import uuid
 import hashlib
 
 class Cell:
@@ -9,6 +10,7 @@ class Cell:
         self.line_end = line_end
         self.output = ""
         self.name = cell_name
+        self.id = uuid.uuid4().hex
 
     def __str__(self):
         source_numbered = "\n".join([f"{self.line_start+i+1} {line}" for i, line in enumerate(self.source.split("\n"))])
@@ -17,7 +19,16 @@ class Cell:
     def __repr__(self):
         return str(self)
 
-    def id(self):
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def nsh(self):
+        """
+        Returns the "normalized source hash" in order to compare cells
+        with each other.
+        Ideally this would go deeper than just stripping whitespace and hashing
+        the source. TBD.
+        """
         hash_input = self.source.strip()
         return hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
@@ -30,6 +41,6 @@ class CodeCell(Cell):
 def match_cells(old_cells: [Cell], new_cells: [Cell]):
     for nc in new_cells:
         for oc in old_cells:
-            if nc.id() == oc.id():
+            if nc.nsh() == oc.nsh():
                 nc.output = oc.output
                 break
