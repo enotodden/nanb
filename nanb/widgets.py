@@ -1,5 +1,5 @@
 from textual.widget import Widget
-from textual.widgets import Markdown, Label, Static, Log
+from textual.widgets import Markdown, Label, Static, Log, Footer
 from textual.app import ComposeResult
 from textual.events import Click
 from textual.reactive import var
@@ -126,3 +126,27 @@ class Output(Log):
             return
         self.clear()
         self.write(cell.output)
+
+
+class FooterWithSpinner(Footer):
+
+    def render(self):
+        return self.renderable
+
+    def on_mount(self):
+        if self._key_text is None:
+            self._key_text = self._make_key_text()
+        self.renderable = rich.spinner.Spinner("point", text=self._key_text)
+        self.interval_update = self.set_interval(1 / 60, self.update_rendering)
+
+    def pause_spinner(self):
+        self.interval_update.pause()
+
+    def resume_spinner(self):
+        self.interval_update.resume()
+
+    def update_rendering(self):
+        self.refresh(layout=True)
+
+    def render(self):
+        return self.renderable

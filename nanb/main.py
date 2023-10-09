@@ -20,7 +20,7 @@ from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
 from nanb.config import Config, read_config
 from nanb.client import UnixDomainClient
 
-from nanb.widgets import MarkdownSegment, CodeSegment, Spinner, Output
+from nanb.widgets import MarkdownSegment, CodeSegment, Output, FooterWithSpinner
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -190,7 +190,13 @@ class ServerManager:
         self.stop()
         self.start()
 
+from textual.binding import Binding
+
 class App(textual.app.App):
+
+    BINDINGS = [
+        Binding(key="q", action="quit", description="Quit"),
+    ]
 
     def __init__(self, config: Config, cells, client, filename, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -208,11 +214,9 @@ class App(textual.app.App):
         self.output.use_cell(cell)
 
     def on_mount(self):
-        self.spinner.pause()
+        self.footer.pause_spinner()
 
     def compose(self) -> textual.app.ComposeResult:
-        self.spinner = Spinner(id="spin")
-        yield self.spinner
         with textual.containers.Container(id="app-grid"):
             self.cellsw = Cells(self.cells, id="cells")
             self.cellsw.on_output = self.on_output
@@ -221,6 +225,8 @@ class App(textual.app.App):
             with textual.containers.Container(id="output"):
                 self.output = Output()
                 yield self.output
+        self.footer = FooterWithSpinner()
+        yield self.footer
 
         loop = asyncio.get_event_loop()
         self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
@@ -238,7 +244,7 @@ class App(textual.app.App):
 
             started = False
 
-            self.spinner.resume()
+            self.footer.resume_spinner()
             while not task.done():
                 try:
                     result = await asyncio.wait_for(q.get(), timeout=0.2)
@@ -253,7 +259,7 @@ class App(textual.app.App):
                     self.output.use_cell(self.cellsw.current.cell)
                 except asyncio.TimeoutError:
                     pass
-            self.spinner.pause()
+            self.footer.pause_spinner()
             w.state = ""
 
     async def watch_sourcefile(self):
