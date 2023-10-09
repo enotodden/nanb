@@ -194,7 +194,7 @@ Screen {
     border: round $background;
 }
 .segment:focus{
-    border: round green;
+    border-left: round green;
 }
 .segment.last {
     margin-bottom: 0;

@@ -219,9 +219,11 @@ class App(textual.app.App):
         super().exit(*args, **kwargs)
 
     def action_restart_kernel(self):
+        self.footer.resume_spinner()
         self.clear_task_queue()
         self.sm.restart()
         self.client = UnixDomainClient(self.sm.socket_file)
+        self.footer.pause_spinner()
 
     def on_output(self, cell: Cell):
         self.output.use_cell(cell)

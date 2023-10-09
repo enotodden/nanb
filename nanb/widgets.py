@@ -5,6 +5,8 @@ from textual.events import Click
 from textual.reactive import var
 from rich.syntax import Syntax
 import rich.spinner
+import rich.text
+import rich.table
 
 from nanb.cell import Cell
 
@@ -128,25 +130,70 @@ class Output(Log):
         self.write(cell.output)
 
 
-class FooterWithSpinner(Footer):
+class FooterSpinner(rich.spinner.Spinner):
 
-    def render(self):
-        return self.renderable
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.paused = False
+
+    def render(self, time: float):
+        """
+        Overrides the default spinner render in order to make the spinner
+        stay put when scrolling and re-rendering occurs.
+        Also ensures that the footer is right-aligned with the spinner on the
+        right of the screen.
+        Other than that it works exactly like the stock spinner's render method.
+        """
+        if self.start_time is None:
+            self.start_time = time
+
+        if self.paused:
+            frame_no = 0
+        else:
+            frame_no = ((time - self.start_time) * self.speed) / (
+                self.interval / 1000.0
+            ) + self.frame_no_offset
+        frame = rich.text.Text(
+            self.frames[int(frame_no) % len(self.frames)], style=self.style or ""
+        )
+
+        if self._update_speed:
+            self.frame_no_offset = frame_no
+            self.start_time = time
+            self.speed = self._update_speed
+            self._update_speed = 0.0
+
+        if not self.text:
+            return frame
+        elif isinstance(self.text, (str, rich.text.Text)):
+            return rich.text.Text.assemble(self.text, " ", frame, " 🐍", justify="right")
+        else:
+            table = rich.table.Table.grid(padding=1)
+            table.add_row(frame, self.text)
+            return table
+
+class FooterWithSpinner(Footer):
 
     def on_mount(self):
         if self._key_text is None:
             self._key_text = self._make_key_text()
-        self.renderable = rich.spinner.Spinner("point", text=self._key_text)
+        self.renderable = FooterSpinner("point", text=self._key_text)
+        self.renderable.paused = True
         self.interval_update = self.set_interval(1 / 60, self.update_rendering)
 
     def pause_spinner(self):
         self.interval_update.pause()
+        self.renderable.paused = True
+        self.refresh(layout=True)
 
     def resume_spinner(self):
         self.interval_update.resume()
+        self.renderable.paused = False
 
     def update_rendering(self):
         self.refresh(layout=True)
 
     def render(self):
         return self.renderable
+
+
