@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import argparse
 import signal
 import asyncio
@@ -154,9 +155,9 @@ CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
 
 class ServerManager:
 
-    def __init__(self, server_log_file):
+    def __init__(self, server_log_file="nanb_server.log"):
         self.socket_file = None
-        self.server_log_file = server_log_file
+        self.server_log_file = open(server_log_file, "w")
 
     def start(self):
         socket_uuid = uuid.uuid4().hex
@@ -183,8 +184,8 @@ class ServerManager:
             time.sleep(0.1)
 
     def stop(self):
-        server.terminate()
-        server.wait()
+        self.server.terminate()
+        self.server.wait()
 
     def restart(self):
         self.stop()
@@ -196,9 +197,10 @@ class App(textual.app.App):
 
     BINDINGS = [
         Binding(key="q", action="quit", description="Quit"),
+        Binding(key="ctrl+r", action="restart_kernel", description="Restart Kernel"),
     ]
 
-    def __init__(self, config: Config, cells, client, filename, *args, **kwargs):
+    def __init__(self, config: Config, cells, server_log_file, filename, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.is_running_code = False
         self.output = None
@@ -206,9 +208,20 @@ class App(textual.app.App):
         if config.css:
             self.CSS += "\n" + config.css
         self.cells = cells
-        self.client = client
         self.filename = filename
         self.task_queue = asyncio.Queue()
+        self.sm = ServerManager(server_log_file)
+        self.sm.start()
+        self.client = UnixDomainClient(self.sm.socket_file)
+
+    def exit(self, *args, **kwargs):
+        self.sm.stop()
+        super().exit(*args, **kwargs)
+
+    def action_restart_kernel(self):
+        self.clear_task_queue()
+        self.sm.restart()
+        self.client = UnixDomainClient(self.sm.socket_file)
 
     def on_output(self, cell: Cell):
         self.output.use_cell(cell)
@@ -295,6 +308,8 @@ class App(textual.app.App):
                 self.task_queue.get_nowait()
             except asyncio.QueueEmpty:
                 pass
+        for w in self.cellsw.widgets:
+            w.state = ""
 
 
 def main():
@@ -314,28 +329,15 @@ def main():
         sys.exit(1)
         return
 
-    socket_uuid = uuid.uuid4().hex
-    socket_file = "/tmp/nanb_socket_" + socket_uuid
-
     config = read_config(args.config_dir)
-
-    server_log_file = open(args.server_log_file, "w")
-    env = os.environ.copy()
-    env["PYTHONUNBUFFERED"] = "1"
-    server = subprocess.Popen([sys.executable, "-m", "nanb.server", "--socket-file", socket_file], stdout=server_log_file, stderr=server_log_file, env=env)
-
-    client = UnixDomainClient(socket_file)
 
     if args.command == "run":
         with open(args.file) as f:
             source = f.read()
             cells = split_to_cells(source)
-            App(config, cells, client, args.file).run()
+            App(config, cells, args.server_log_file, args.file).run()
     else:
         sys.stderr.write(f"ERROR: Unknown command '{args.command}'\n")
-
-    server.terminate()
-    server.wait()
 
 if __name__ == "__main__":
     main()
