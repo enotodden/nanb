@@ -172,11 +172,16 @@ Markdown {
     text-style: bold dim;
 }
 
+.celllabel {
+    margin-top: 1;
+    margin-right: 1;
+}
+
 
 
 
 Screen {
-    background: $panel;
+    background: #1a1a1a;
 }
 
 #app-grid {
@@ -186,18 +191,33 @@ Screen {
     grid-rows: 1fr;
     grid-gutter: 1;
     row-span: 2;
+    background: #1a1a1a;
 }
+
 .segment {
     height: auto;
-    background: $background;
+    background: #1a1a1a;
     margin-bottom: 1;
-    border: round $background;
+    border-left: thick #ccc;
+    padding-bottom: 1;
+    margin-right: 1;
+    margin-left: 1;
 }
 .segment:focus{
-    border-left: round green;
+    border-left:  thick #1c786d;
+    margin-left: 1;
+    margin-bottom: 1;
 }
+
+.segment.first {
+    margin-top: 1;
+    margin-bottom: 1;
+    margin-left: 1;
+}
+
 .segment.last {
-    margin-bottom: 0;
+    margin-bottom: 1;
+    margin-left: 1;
 }
 
 .celllabel {
@@ -216,26 +236,11 @@ Screen {
 #output {
     height: 100%;
     scrollbar-gutter: stable;
+    background: #1a1a1a;
 }
 
 #output Log {
     padding-left: 1;
-    padding-top: 1;
-}
-
-#bottom-right {
-    height: 100%;
-    layout: grid;
-    grid-size: 3;
-    grid-columns: 1fr;
-    grid-rows: 1fr;
-    grid-gutter: 1;
-}
-
-#bottom-right-final {
-    column-span: 2;
-}
-
-#bottom-right > Static {
-    height: 100%;
+    padding-top: 0;
+    background: #1a1a1a;
 }

@@ -88,6 +88,8 @@ class Cells(textual.containers.VerticalScroll):
             classes = "segment"
             if i == len(self.cells)-1:
                 classes += " last"
+            if i == 0:
+                classes += " first"
             if cell.cell_type == "markdown":
                 w = MarkdownSegment(i, cell, classes=classes, id=f"segment_{i}")
             elif cell.cell_type == "code":

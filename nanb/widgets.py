@@ -77,6 +77,7 @@ class CodeSegment(Segment):
             word_wrap=True,
             indent_guides=True,
             theme="github-dark",
+            background_color="#1A1A1A",
         ), classes='codecell', id=f"cell_{self.idx}")
         yield self.label
         yield self.content
