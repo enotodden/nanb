@@ -14,6 +14,7 @@ import rich
 import rich.markdown
 import rich.spinner
 from textual.reactive import reactive
+from textual.binding import Binding
 
 from watchfiles import awatch
 
@@ -193,13 +194,14 @@ class ServerManager:
         self.stop()
         self.start()
 
-from textual.binding import Binding
 
 class App(textual.app.App):
 
     BINDINGS = [
-        Binding(key="q", action="quit", description="Quit"),
-        Binding(key="ctrl+r", action="restart_kernel", description="Restart Kernel"),
+        #Binding(key="ctrl+s", action="save", description="Save output 💾"),
+        Binding(key="q", action="quit", description="Quit ❌"),
+        Binding(key="ctrl+r", action="restart_kernel", description="Restart Kernel 🔄"),
+        Binding(key="ctrl+y", action="", description="Copy"),
     ]
 
     def __init__(self, config: Config, cells, server_log_file, filename, *args, **kwargs):

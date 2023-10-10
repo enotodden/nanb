@@ -244,6 +244,6 @@ Screen {
 
 #output Log {
     padding-left: 1;
-    padding-top: 0;
+    padding-top: 1;
     background: #1a1a1a;
 }

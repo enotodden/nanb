@@ -1,8 +1,12 @@
+import subprocess
+
 from textual.widget import Widget
-from textual.widgets import Markdown, Label, Static, Log, Footer
+from textual.widgets import Markdown, Label, Static, Log, Footer, TextArea
 from textual.app import ComposeResult
 from textual.events import Click
 from textual.reactive import var
+from textual.binding import Binding
+
 from rich.syntax import Syntax
 import rich.spinner
 import rich.text
@@ -114,14 +118,27 @@ class Spinner(Static):
     def resume(self) -> None:
         self.interval_update.resume()
 
+def write_to_clipboard(output):
+    process = subprocess.Popen(
+        'pbcopy', env={'LANG': 'en_US.UTF-8'}, stdin=subprocess.PIPE)
+    process.communicate(output.encode('utf-8'))
 
-class Output(Log):
+class Output(TextArea):
     """
     A widget that displays the output of a cell
     """
 
-    def on_click(self, event: Click) -> None:
-        self.focus()
+    BINDINGS = [
+        Binding("ctrl+y", "copy", "copy to clipboard", show=True),
+    ]
+
+    def action_copy(self):
+        write_to_clipboard(self.selected_text)
+
+    def on_mount(self):
+        self.show_line_numbers = False
+        self.theme = "vscode_dark"
+        super().on_mount()
 
     def use_cell(self, cell: Cell):
         if cell is None:
@@ -129,6 +146,17 @@ class Output(Log):
             return
         self.clear()
         self.write(cell.output)
+
+    def replace(self, *args, **kwargs):
+        """ Makes the textarea non-editable """
+        return None
+
+    def write(self, text):
+        self._set_document(text, self.language)
+        self._refresh_size()
+        self.move_cursor((self.document.line_count - 1, 0))
+        self.scroll_cursor_visible()
+
 
 
 class FooterSpinner(rich.spinner.Spinner):
