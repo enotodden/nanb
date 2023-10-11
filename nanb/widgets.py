@@ -13,6 +13,7 @@ import rich.text
 import rich.table
 
 from nanb.cell import Cell
+from nanb.config import C
 
 class Segment(Widget):
     """
@@ -45,8 +46,8 @@ class Segment(Widget):
             state = f" - [{state}]"
         if self.cell.name is not None:
             cellname = self.cell.name
-            if len(cellname) > 20:
-                cellname = cellname[:20] + "..."
+            if len(cellname) > C.cell_name_max:
+                cellname = cellname[:C.cell_name_max] + "..."
             return f"{cellname} - {self.idx+1}{state}"
         return f"{self.idx+1}{state}"
 
@@ -80,8 +81,8 @@ class CodeSegment(Segment):
             start_line=self.cell.line_start,
             word_wrap=True,
             indent_guides=True,
-            theme="github-dark",
-            background_color="#1A1A1A",
+            theme=C.code_theme,
+            background_color=C.code_background,
         ), classes='codecell', id=f"cell_{self.idx}")
         yield self.label
         yield self.content
@@ -129,15 +130,18 @@ class Output(TextArea):
     """
 
     BINDINGS = [
-        Binding("ctrl+y", "copy", "copy to clipboard", show=True),
+        Binding(C.keybindings["copy"], "copy", C.tr["action_copy"]),
     ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def action_copy(self):
         write_to_clipboard(self.selected_text)
 
     def on_mount(self):
-        self.show_line_numbers = False
-        self.theme = "vscode_dark"
+        self.show_line_numbers = C.output_line_numbers
+        self.theme = C.output_theme
         super().on_mount()
 
     def use_cell(self, cell: Cell):

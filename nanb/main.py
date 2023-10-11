@@ -19,7 +19,7 @@ from textual.binding import Binding
 from watchfiles import awatch
 
 from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
-from nanb.config import Config, read_config
+from nanb.config import Config, read_config, load_config, C
 from nanb.client import UnixDomainClient
 
 from nanb.widgets import MarkdownSegment, CodeSegment, Output, FooterWithSpinner
@@ -158,13 +158,13 @@ CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
 
 class ServerManager:
 
-    def __init__(self, server_log_file="nanb_server.log"):
+    def __init__(self):
         self.socket_file = None
-        self.server_log_file = open(server_log_file, "w")
+        self.server_log_file = open(C.server_log_file, "w")
 
     def start(self):
         socket_uuid = uuid.uuid4().hex
-        self.socket_file = "/tmp/nanb_socket_" + socket_uuid
+        self.socket_file = C.socket_prefix + socket_uuid
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
@@ -195,130 +195,8 @@ class ServerManager:
         self.start()
 
 
-class App(textual.app.App):
-
-    BINDINGS = [
-        #Binding(key="ctrl+s", action="save", description="Save output 💾"),
-        Binding(key="q", action="quit", description="Quit ❌"),
-        Binding(key="ctrl+r", action="restart_kernel", description="Restart Kernel 🔄"),
-        Binding(key="ctrl+y", action="", description="Copy"),
-    ]
-
-    def __init__(self, config: Config, cells, server_log_file, filename, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.is_running_code = False
-        self.output = None
-        self.CSS = CSS
-        if config.css:
-            self.CSS += "\n" + config.css
-        self.cells = cells
-        self.filename = filename
-        self.task_queue = asyncio.Queue()
-        self.sm = ServerManager(server_log_file)
-        self.sm.start()
-        self.client = UnixDomainClient(self.sm.socket_file)
-
-    def exit(self, *args, **kwargs):
-        self.sm.stop()
-        super().exit(*args, **kwargs)
-
-    def action_restart_kernel(self):
-        self.footer.resume_spinner()
-        self.clear_task_queue()
-        self.sm.restart()
-        self.client = UnixDomainClient(self.sm.socket_file)
-        self.footer.pause_spinner()
-
-    def on_output(self, cell: Cell):
-        self.output.use_cell(cell)
-
-    def on_mount(self):
-        self.footer.pause_spinner()
-
-    def compose(self) -> textual.app.ComposeResult:
-        with textual.containers.Container(id="app-grid"):
-            self.cellsw = Cells(self.cells, id="cells")
-            self.cellsw.on_output = self.on_output
-            self.cellsw.on_run_code = self.run_code
-            yield self.cellsw
-            with textual.containers.Container(id="output"):
-                self.output = Output()
-                yield self.output
-        self.footer = FooterWithSpinner()
-        yield self.footer
-
-        loop = asyncio.get_event_loop()
-        self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
-        self.watch_sourcefile_task = asyncio.create_task(self.watch_sourcefile())
-
-    async def process_task_queue(self):
-        while True:
-            w = await self.task_queue.get()
-            loop = asyncio.get_event_loop()
-            w.cell.output = ""
-            w.state = "RUNNING"
-
-            q = asyncio.Queue()
-            task = loop.create_task(self.client.run_code(w.cell.line_start, w.cell.source, q))
-
-            started = False
-
-            self.footer.resume_spinner()
-            while not task.done():
-                try:
-                    result = await asyncio.wait_for(q.get(), timeout=0.2)
-                    if not result:
-                        continue
-                    if not started:
-                        started = True
-                        w.cell.output = ""
-                        w.state = "RUNNING"
-                    w.cell.output += result
-
-                    self.output.use_cell(self.cellsw.current.cell)
-                except asyncio.TimeoutError:
-                    pass
-            self.footer.pause_spinner()
-            w.state = ""
-
-    async def watch_sourcefile(self):
-        async for changes in awatch(self.filename):
-            for change, _ in changes:
-                if change == 2:
-                    await self.reload_source()
-
-    async def reload_source(self):
-        with open(self.filename) as f:
-            try:
-                source = f.read()
-                new_cells = split_to_cells(source)
-                match_cells(self.cells, new_cells)
-                self.cells = new_cells
-                await self.cellsw.refresh_cells(self.cells)
-                self.output.use_cell(self.cellsw.current.cell)
-                self.clear_task_queue()
-            except Exception as exc:
-                print(exc)
-                self.exit(1)
-
-    @textual.work()
-    async def run_code(self, w):
-        if w.cell.cell_type != "code":
-            return
-        w.state = "PENDING"
-        await self.task_queue.put(w)
-
-    def clear_task_queue(self):
-        while not self.task_queue.empty():
-            try:
-                self.task_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
-        for w in self.cellsw.widgets:
-            w.state = ""
-
-
 def main():
+
     argp = argparse.ArgumentParser()
     argp.add_argument("-c", "--config-dir", default=os.path.join(os.path.expanduser("~"), ".nanb"))
     argp.add_argument("-L", "--server-log-file", default="nanb_server.log")
@@ -335,13 +213,140 @@ def main():
         sys.exit(1)
         return
 
-    config = read_config(args.config_dir)
+    load_config(args.config_dir)
+
+    # FIXME: This is dumb, but textual lacks support for dynamic bindings it seems,
+    # although there does appear to be a fix in the works, for now we'll
+    # just shove it in here
+    class App(textual.app.App):
+
+        BINDINGS = [
+            #Binding(key="ctrl+s", action="save", description="Save output 💾"),
+            Binding(key=C.keybindings["quit"], action="quit", description=C.tr["action_quit"]),
+            Binding(key=C.keybindings["restart_kernel"], action="restart_kernel", description=C.tr["action_restart_kernel"]),
+            Binding(key=C.keybindings["copy"], action="", description=C.tr["action_copy"]),
+        ]
+
+        def __init__(self, cells, server_log_file, filename, *args, **kwargs):
+            self.is_running_code = False
+            self.output = None
+            self.CSS = CSS
+            if C.css is not None:
+                self.CSS += "\n" + C.css
+            self.cells = cells
+            self.filename = filename
+            self.task_queue = asyncio.Queue()
+            self.sm = ServerManager()
+            self.sm.start()
+            self.client = UnixDomainClient(self.sm.socket_file)
+
+            super().__init__(*args, **kwargs)
+
+        def exit(self, *args, **kwargs):
+            self.sm.stop()
+            super().exit(*args, **kwargs)
+
+        def action_restart_kernel(self):
+            self.footer.resume_spinner()
+            self.clear_task_queue()
+            self.sm.restart()
+            self.client = UnixDomainClient(self.sm.socket_file)
+            self.footer.pause_spinner()
+
+        def on_output(self, cell: Cell):
+            self.output.use_cell(cell)
+
+        def on_mount(self):
+            self.footer.pause_spinner()
+
+        def compose(self) -> textual.app.ComposeResult:
+            with textual.containers.Container(id="app-grid"):
+                self.cellsw = Cells(self.cells, id="cells")
+                self.cellsw.on_output = self.on_output
+                self.cellsw.on_run_code = self.run_code
+                yield self.cellsw
+                with textual.containers.Container(id="output"):
+                    self.output = Output()
+                    yield self.output
+            self.footer = FooterWithSpinner()
+            yield self.footer
+
+            loop = asyncio.get_event_loop()
+            self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
+            self.watch_sourcefile_task = asyncio.create_task(self.watch_sourcefile())
+
+        async def process_task_queue(self):
+            while True:
+                w = await self.task_queue.get()
+                loop = asyncio.get_event_loop()
+                w.cell.output = ""
+                w.state = C.tr["state_running"]
+
+                q = asyncio.Queue()
+                task = loop.create_task(self.client.run_code(w.cell.line_start, w.cell.source, q))
+
+                started = False
+
+                self.footer.resume_spinner()
+                while not task.done():
+                    try:
+                        result = await asyncio.wait_for(q.get(), timeout=0.2)
+                        if not result:
+                            continue
+                        if not started:
+                            started = True
+                            w.cell.output = ""
+                            w.state = C.tr["state_running"]
+                        w.cell.output += result
+
+                        self.output.use_cell(self.cellsw.current.cell)
+                    except asyncio.TimeoutError:
+                        pass
+                self.footer.pause_spinner()
+                w.state = ""
+
+        async def watch_sourcefile(self):
+            async for changes in awatch(self.filename):
+                for change, _ in changes:
+                    if change == 2:
+                        await self.reload_source()
+
+        async def reload_source(self):
+            with open(self.filename) as f:
+                try:
+                    source = f.read()
+                    new_cells = split_to_cells(source)
+                    match_cells(self.cells, new_cells)
+                    self.cells = new_cells
+                    await self.cellsw.refresh_cells(self.cells)
+                    self.output.use_cell(self.cellsw.current.cell)
+                    self.clear_task_queue()
+                except Exception as exc:
+                    print(exc)
+                    self.exit(1)
+
+        @textual.work()
+        async def run_code(self, w):
+            if w.cell.cell_type != "code":
+                return
+            w.state = C.tr["state_pending"]
+            await self.task_queue.put(w)
+
+        def clear_task_queue(self):
+            while not self.task_queue.empty():
+                try:
+                    self.task_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            for w in self.cellsw.widgets:
+                w.state = ""
+
 
     if args.command == "run":
         with open(args.file) as f:
             source = f.read()
             cells = split_to_cells(source)
-            App(config, cells, args.server_log_file, args.file).run()
+            App(cells, args.server_log_file, args.file).run()
     else:
         sys.stderr.write(f"ERROR: Unknown command '{args.command}'\n")
 
