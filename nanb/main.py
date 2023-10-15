@@ -36,8 +36,10 @@ def split_to_cells(source) -> [Cell]:
     celltype = "code"
     cellname = None
     for i, line in enumerate(source.split("\n")):
-        if line.startswith("# ---") or line.startswith("# ==="):
+        if line.startswith("# ---") or line.strip() == r"# %%%":
             if lines:
+                if celltype == "markdown":
+                    lines = [l[1:] for l in lines]
                 out.append((celltype, cellname, start_line, i-1, "\n".join(lines)))
             cellname = line[5:].strip()
             if cellname == "":
@@ -48,7 +50,7 @@ def split_to_cells(source) -> [Cell]:
                 celltype = "code"
             else:
                 celltype = "markdown"
-            start_line = i+1
+            start_line = i+2 # skip the --- line
             lines = []
         else:
             if celltype == "markdown":
@@ -56,6 +58,8 @@ def split_to_cells(source) -> [Cell]:
                     raise Exception(f"Markdown cell at line {i} contains non-empty line that doesn't start with #")
             lines.append(line)
     if lines:
+        if celltype == "markdown":
+            lines = [l[1:] for l in lines]
         out.append((celltype, cellname, start_line, i-1, "\n".join(lines)))
 
     cells = []
