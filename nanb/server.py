@@ -1,3 +1,5 @@
+import signal
+import _thread
 import socketserver
 import os
 import io
@@ -151,7 +153,7 @@ class UnixDomainServer:
         try:
             # Start the server
             print(f"Server listening on {self.filename}")
-            self.server.serve_forever()
+            self.server.serve_forever(0.1)
         except KeyboardInterrupt:
             # Handle keyboard interrupt
             print("Server stopped")
@@ -160,13 +162,29 @@ class UnixDomainServer:
             self.server.server_close()
             os.remove(self.filename)
 
+    def shutdown(self):
+        self.server.shutdown()
+
+
 def main():
     argp = argparse.ArgumentParser()
     argp.add_argument("-m", "--mode", choices=["unix-domain"], default="unix-domain")
     argp.add_argument("-s", "--socket-file", default="/tmp/nanb_socket")
     args = argp.parse_args()
     filename = args.socket_file
+
     server = UnixDomainServer(filename)
+
+    def stop_server():
+        server.shutdown()
+        if os.path.exists(args.socket_file):
+            os.remove(args.socket_file)
+        os.exit(0)
+
+    def sighandler(s, m_):
+        _thread.start_new_thread(stop_server, ())
+    signal.signal(signal.SIGTERM, sighandler)
+
     server.run()
 
 if __name__ == "__main__":

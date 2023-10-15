@@ -192,7 +192,13 @@ class ServerManager:
 
     def stop(self):
         self.server.terminate()
-        self.server.wait()
+        try:
+            self.server.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            self.server.kill()
+            self.server.wait()
+        if os.path.exists(self.socket_file):
+            os.remove(self.socket_file)
 
     def restart(self):
         self.stop()
