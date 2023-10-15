@@ -68,7 +68,7 @@ Jupyter notbooks are great, but they are not regular Python files, and can be ha
 This project is an attempt at providing a stateful REPL-like execution environment for vanilla Python,
 in the terminal, with regular source files that you edit using the editor/IDE of your choice.
 
-## 101
+## Cell syntax
 
 Like in jupyter, a file used in nanb is divided into cells that can be executed independently.
 
@@ -166,8 +166,8 @@ See https://textual.textualize.io/guide/CSS/ for more information.
 
 ### Does nanb support editing code?
 
-No. The whole idea is providing an environment for execution, letting you use your own editor to write code.
+No. The idea is providing an environment for execution, letting you use your own editor to write code.
 
-### Does nanb support jupyter style magic like `#!` for shell commands?
+### Does nanb support jupyter style magic?
 
 No, as that would make your files behave differently in nanb vs running your files using the regular python commmand.
