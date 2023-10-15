@@ -214,6 +214,17 @@ class ServerManager:
         self.server.send_signal(signal.SIGUSR1)
 
 
+class HelpScreen(textual.screen.Screen):
+    BINDINGS = [
+        Binding(key="escape", action="esc", description="Close"),
+        Binding(key="h", action="esc", description="Close"),
+    ]
+    def compose(self):
+        yield textual.widgets.MarkdownViewer(C.docs(), show_table_of_contents=True)
+
+    def action_esc(self):
+        self.app.pop_screen()
+
 def main():
 
     argp = argparse.ArgumentParser()
@@ -248,6 +259,8 @@ def main():
 
             Binding(key=C.keybindings["restart_kernel"], action="restart_kernel", description=C.tr["action_restart_kernel"]),
             Binding(key=C.keybindings["quit"], action="quit", description=C.tr["action_quit"]),
+
+            Binding(key="h", action="help", description=C.tr["action_help"]),
         ]
 
         def __init__(self, cells, server_log_file, filename, *args, **kwargs):
@@ -268,6 +281,9 @@ def main():
         def exit(self, *args, **kwargs):
             self.sm.stop()
             super().exit(*args, **kwargs)
+
+        def action_help(self):
+            self.push_screen(HelpScreen())
 
         def action_restart_kernel(self):
             self.footer.resume_spinner()

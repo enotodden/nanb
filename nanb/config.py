@@ -20,8 +20,29 @@ DEFAULT_TR = {
     "action_copy": "Copy",
     "action_clear_cell_output": "Clear Cell Output",
     "action_interrupt": "Interrupt",
+    "action_help": "Help",
+
+    # For closing the help screen
+    "action_close": "Close",
+
     "state_running": "RUNNING",
     "state_pending": "PENDING",
+
+    "dh_keybindings": "Keybindings",
+    "dh_key": "Key",
+    "dh_action": "Action",
+
+    "kb_quit": "Quit the application",
+    "kb_restart_kernel": "Restart the kernel",
+    "kb_copy": "Copy selected output",
+    "kb_clear_cell_output": "Clear the output of the current cell",
+    "kb_interrupt": "Interrupt the current execution",
+
+    "kb_help": "Show this help screen",
+    "kb_arrows": "Move between cells",
+    "kb_enter": "Execute the current cell",
+
+    "kb_close_help": "Close the help screen",
 }
 
 DEFAULT_SOCKET_PREFIX = "/tmp/nanb_socket_"
@@ -48,6 +69,25 @@ class Config:
     output_theme: str        = DEFAULT_OUTPUT_THEME
     output_line_numbers: bool = DEFAULT_OUTPUT_LINE_NUMBERS
 
+    def keybinding_docs(self) -> str:
+        lines = []
+        for k, v in self.keybindings.items():
+            lines.append(f"| **{v}** | {self.tr['kb_' + k]} |")
+        return "\n".join(lines)
+
+    def docs(self) -> str:
+        return f"""
+# {self.tr['dh_keybindings']}
+| Key | Action |
+| --- | ------ |
+{self.keybinding_docs()}
+|       |        |
+| ⬆︎ / ⬇︎ | {self.tr['kb_arrows']} |
+| ↵     | {self.tr['kb_enter']}  |
+|       |        |
+| h     | {self.tr['kb_help']} |
+| h/ESC | {self.tr['kb_close_help']} |
+"""
 
 def read_config(path: str) -> Config:
     if not os.path.exists(path):
