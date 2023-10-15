@@ -150,7 +150,7 @@ state_pending = "PENDING"
     - `restart_kernel`: Key combination used to kill the code execution server and start a new one.
     - `copy`: Key combination used to copy selected text from the output.
     - `clear_cell_output`: Key combination used to clear a single cell of output.
-    - `interrrupt`: Key combination used to interrupt current execution.
+    - `interrupt`: Key combination used to interrupt current execution.
 - `tr`: Strings/translations used to render state info and help text.
 - `cell_name_max`: Sets the max number of characters cell names/labels are displayed with.
 
