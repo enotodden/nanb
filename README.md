@@ -100,11 +100,18 @@ nanb can be configured by adding a toml configuration file in `$HOME/.nanb/nanb.
 ### Default config:
 
 ```
-cell_name_max = 30
+cell_name_max = 20
+
+[keybindings]
+quit = "q"
+restart_kernel = "ctrl+r"
+copy = "y"
+clear_cell_output = "c"
+interrupt = "i"
 
 [server]
 log_file = "/tmp/nanb_server.log"
-prefix = "/tmp/nanb_socket_"
+socket_prefix = "/tmp/nanb_socket_"
 
 [code]
 theme = "github-dark"
@@ -114,15 +121,12 @@ background = "#1a1a1a"
 theme = "vscode_dark"
 line_numbers = false
 
-[keybindings]
-quit = "q"
-restart_kernel = "ctrl+r"
-copy = "ctrl+y"
-
 [tr]
-action_quit = "Quit ❌"
-action_restart_kernel = "Restart Kernel 🔄"
-action_copy = "Copy 📋"
+action_quit = "Quit"
+action_restart_kernel = "Restart Kernel"
+action_copy = "Copy"
+action_clear_cell_output = "Clear Cell Output"
+action_interrupt = "Interrupt"
 state_running = "RUNNING"
 state_pending = "PENDING"
 ```

@@ -7,6 +7,7 @@ import code
 import ast
 import contextlib
 import argparse
+import uuid
 from dataclasses import dataclass
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -85,10 +86,23 @@ class Runtime:
 
     def __init__(self):
         self.interpreter = code.InteractiveInterpreter()
+        self.pid = None
+        self.interrupted = None
+
+        def interrupthandler(s, m_):
+            """ Interrupt the current running pid when receiving SIGUSR1"""
+            self.interrupted = self.runid
+            os.kill(self.pid, signal.SIGINT)
+        signal.signal(signal.SIGUSR1, interrupthandler)
 
     def run_code(self, line_start:int, source: str, outfile: IO):
         with contextlib.redirect_stdout(outfile):
             with contextlib.redirect_stderr(outfile):
+                # Set the current pid, so that we can knock it out
+                # using the SIGUSR1 handler
+                self.pid = os.getpid()
+                self.runid = uuid.uuid4().hex
+
                 # If the last statement is an expression, we print the result
                 # of it, like jupyter would
                 last = None
@@ -104,11 +118,14 @@ class Runtime:
                 # is an expression
                 self.interpreter.runsource(source, symbol='exec')
 
+                # Don't keep running this cell if we were interrupted
+                if self.interrupted == self.runid:
+                    return
+
                 # If the last statement was an expression, it will be assigned to _
                 # and we print it
                 if last is not None:
                     self.interpreter.runsource(last, symbol='exec')
-
 
 RUNTIME = Runtime()
 
@@ -154,17 +171,17 @@ class UnixDomainServer:
             # Start the server
             print(f"Server listening on {self.filename}")
             self.server.serve_forever(0.1)
-        except KeyboardInterrupt:
-            # Handle keyboard interrupt
-            print("Server stopped")
+        except Exception as e:
+            print("Server error", e)
         finally:
+            print("Server shutting down")
             # Clean up by removing the socket file
             self.server.server_close()
-            os.remove(self.filename)
+            if os.path.exists(self.filename):
+                os.remove(self.filename)
 
     def shutdown(self):
         self.server.shutdown()
-
 
 def main():
     argp = argparse.ArgumentParser()
@@ -176,10 +193,15 @@ def main():
     server = UnixDomainServer(filename)
 
     def stop_server():
-        server.shutdown()
-        if os.path.exists(args.socket_file):
-            os.remove(args.socket_file)
-        os.exit(0)
+        try:
+            server.shutdown()
+            if os.path.exists(args.socket_file):
+                os.remove(args.socket_file)
+        except Exception as e:
+            sys.stderr.write(f"Error while shutting down server: {e}")
+            sys.stderr.flush()
+        finally:
+            exit(0)
 
     def sighandler(s, m_):
         _thread.start_new_thread(stop_server, ())

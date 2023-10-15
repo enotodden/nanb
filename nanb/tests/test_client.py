@@ -5,6 +5,7 @@ import os
 import subprocess
 import asyncio
 import time
+import signal
 
 from nanb.client import UnixDomainClient
 
@@ -15,7 +16,7 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         server_log_file = sys.stdout
-        print("SOCET FILE", self.socket_file)
+        print("SOCKET FILE", self.socket_file)
         self.server = subprocess.Popen([
                 sys.executable,
                 "-m",
@@ -23,8 +24,8 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
                 "--socket-file",
                 self.socket_file
             ],
-            stdout=server_log_file,
-            stderr=server_log_file,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             env=env
         )
         while True:
@@ -36,7 +37,6 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.server.terminate()
         self.server.wait()
-
 
     async def test_basic(self):
         cl1 = UnixDomainClient(self.socket_file)
@@ -62,3 +62,19 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(out, "bar\n")
         out = await q1.get()
         self.assertEqual(out, "foo\n")
+
+    async def test_interrupt(self):
+        cl1 = UnixDomainClient(self.socket_file)
+        q1 = asyncio.Queue()
+        t = self.loop.create_task(cl1.run_code(0, """foo='bar'""", q1))
+        await asyncio.sleep(1)
+        t = self.loop.create_task(cl1.run_code(0, """import time; time.sleep(1000)""", q1))
+        await asyncio.sleep(1)
+        self.server.send_signal(signal.SIGUSR1)
+
+        t = self.loop.create_task(cl1.run_code(0, """print(foo)""", q1))
+        out = await q1.get()
+        self.assertTrue("KeyboardInterrupt" in out)
+
+        out = await q1.get()
+        self.assertEqual(out, "bar\n")

@@ -7,15 +7,19 @@ import toml
 DEFAULT_KEYBINDINGS = {
     "quit": "q",
     "restart_kernel": "ctrl+r",
-    "copy": "ctrl+y",
+    "copy": "y",
+    "clear_cell_output": "c",
+    "interrupt": "i",
 }
 
 DEFAULT_SERVER_LOG_FILE = "/tmp/nanb_server.log"
 
 DEFAULT_TR = {
-    "action_quit": "Quit ❌",
-    "action_restart_kernel": "Restart Kernel 🔄",
-    "action_copy": "Copy 📋",
+    "action_quit": "Quit",
+    "action_restart_kernel": "Restart Kernel",
+    "action_copy": "Copy",
+    "action_clear_cell_output": "Clear Cell Output",
+    "action_interrupt": "Interrupt",
     "state_running": "RUNNING",
     "state_pending": "PENDING",
 }
@@ -97,3 +101,24 @@ def load_config(path: str):
     c = read_config(path)
     for k, _ in C.__annotations__.items():
         setattr(C, k, getattr(c, k))
+
+
+if __name__ == "__main__":
+    out = dict(
+        keybindings=DEFAULT_KEYBINDINGS,
+        server=dict(
+            log_file=DEFAULT_SERVER_LOG_FILE,
+            socket_prefix=DEFAULT_SOCKET_PREFIX,
+        ),
+        code=dict(
+            theme=DEFAULT_CODE_THEME,
+            background=DEFAULT_CODE_BACKGROUND,
+        ),
+        output=dict(
+            theme=DEFAULT_OUTPUT_THEME,
+            line_numbers=DEFAULT_OUTPUT_LINE_NUMBERS,
+        ),
+        tr=DEFAULT_TR,
+        cell_name_max=DEFAULT_CELL_NAME_MAX,
+    )
+    print(toml.dumps(out))

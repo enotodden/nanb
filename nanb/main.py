@@ -158,6 +158,12 @@ class Cells(textual.containers.VerticalScroll):
         self.mount(*self.widgets)
         self.focus_idx(0)
 
+    def clear_current_cell_output(self):
+        if self.current:
+            self.current.cell.output = ""
+            self.on_output(self.current.cell)
+
+
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
 
 class ServerManager:
@@ -204,6 +210,9 @@ class ServerManager:
         self.stop()
         self.start()
 
+    def interrupt(self):
+        self.server.send_signal(signal.SIGUSR1)
+
 
 def main():
 
@@ -232,9 +241,13 @@ def main():
 
         BINDINGS = [
             #Binding(key="ctrl+s", action="save", description="Save output 💾"),
-            Binding(key=C.keybindings["quit"], action="quit", description=C.tr["action_quit"]),
-            Binding(key=C.keybindings["restart_kernel"], action="restart_kernel", description=C.tr["action_restart_kernel"]),
             Binding(key=C.keybindings["copy"], action="", description=C.tr["action_copy"]),
+
+            Binding(key=C.keybindings["clear_cell_output"], action="clear_cell_output", description=C.tr["action_clear_cell_output"]),
+            Binding(key=C.keybindings["interrupt"], action="interrupt", description=C.tr["action_interrupt"]),
+
+            Binding(key=C.keybindings["restart_kernel"], action="restart_kernel", description=C.tr["action_restart_kernel"]),
+            Binding(key=C.keybindings["quit"], action="quit", description=C.tr["action_quit"]),
         ]
 
         def __init__(self, cells, server_log_file, filename, *args, **kwargs):
@@ -262,6 +275,15 @@ def main():
             self.sm.restart()
             self.client = UnixDomainClient(self.sm.socket_file)
             self.footer.pause_spinner()
+
+        def action_interrupt(self):
+            self.footer.resume_spinner()
+            self.clear_task_queue()
+            self.sm.interrupt()
+            self.footer.pause_spinner()
+
+        def action_clear_cell_output(self):
+            self.cellsw.clear_current_cell_output()
 
         def on_output(self, cell: Cell):
             self.output.use_cell(cell)
