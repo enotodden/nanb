@@ -19,7 +19,7 @@ from textual.binding import Binding
 from watchfiles import awatch
 
 from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
-from nanb.config import Config, read_config, load_config, C
+from nanb.config import Config, read_config, load_config, C, config_toml, default_config_toml
 from nanb.client import UnixDomainClient
 from nanb.server_manager import ServerManager
 from nanb.help_screen import HelpScreen
@@ -244,10 +244,13 @@ def main():
     )
     argp.add_argument("-L", "--server-log-file", default="nanb_server.log")
 
-    subp = argp.add_subparsers(dest="command", required=True)
+    subp = argp.add_subparsers(dest="command", required=True, help="Command")
 
-    subp_run = subp.add_parser("run")
-    subp_run.add_argument("file")
+    subp_run = subp.add_parser("run", help="Run a file")
+    subp_run.add_argument("file", help="File to run")
+
+    subp_default_config = subp.add_parser("default-config", help="Print the default config")
+    subp_default_config = subp.add_parser("config", help="Print the current config")
 
     args = argp.parse_args()
 
@@ -327,6 +330,10 @@ def main():
             source = f.read()
             cells = split_to_cells(source)
             App(cells, args.server_log_file, args.file).run()
+    elif args.command == "default-config":
+        print(default_config_toml())
+    elif args.command == "config":
+        print(config_toml())
     else:
         sys.stderr.write(f"ERROR: Unknown command '{args.command}'\n")
 

@@ -180,8 +180,9 @@ def read_config(path: str) -> Config:
     return c
 
 
-C = Config()
+DEFAULT_CONFIG = Config()
 
+C = Config()
 
 def load_config(path: str):
     c = read_config(path)
@@ -189,22 +190,31 @@ def load_config(path: str):
         setattr(C, k, getattr(c, k))
 
 
-if __name__ == "__main__":
+def _config_toml(c: Config) -> str:
     out = dict(
-        keybindings=DEFAULT_KEYBINDINGS,
+        keybindings=c.keybindings,
         server=dict(
-            log_file=DEFAULT_SERVER_LOG_FILE,
-            socket_prefix=DEFAULT_SOCKET_PREFIX,
+            log_file=c.server_log_file,
+            socket_prefix=c.socket_prefix,
         ),
         code=dict(
-            theme=DEFAULT_CODE_THEME,
-            background=DEFAULT_CODE_BACKGROUND,
+            theme=c.code_theme,
+            background=c.code_background,
         ),
         output=dict(
-            theme=DEFAULT_OUTPUT_THEME,
-            line_numbers=DEFAULT_OUTPUT_LINE_NUMBERS,
+            theme=c.output_theme,
+            line_numbers=c.output_line_numbers,
         ),
-        tr=DEFAULT_TR,
-        cell_name_max=DEFAULT_CELL_NAME_MAX,
+        tr=c.tr,
+        cell_name_max=c.cell_name_max,
     )
-    print(toml.dumps(out))
+    return toml.dumps(out)
+
+def default_config_toml() -> str:
+    return _config_toml(DEFAULT_CONFIG)
+
+def config_toml():
+    return _config_toml(C)
+
+if __name__ == "__main__":
+    print(default_config_toml())
