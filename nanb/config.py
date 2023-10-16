@@ -184,6 +184,7 @@ DEFAULT_CONFIG = Config()
 
 C = Config()
 
+
 def load_config(path: str):
     c = read_config(path)
     for k, _ in C.__annotations__.items():
@@ -210,11 +211,14 @@ def _config_toml(c: Config) -> str:
     )
     return toml.dumps(out)
 
+
 def default_config_toml() -> str:
     return _config_toml(DEFAULT_CONFIG)
 
+
 def config_toml():
     return _config_toml(C)
+
 
 if __name__ == "__main__":
     print(default_config_toml())

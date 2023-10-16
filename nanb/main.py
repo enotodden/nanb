@@ -19,10 +19,18 @@ from textual.binding import Binding
 from watchfiles import awatch
 
 from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
-from nanb.config import Config, read_config, load_config, C, config_toml, default_config_toml
+from nanb.config import (
+    Config,
+    read_config,
+    load_config,
+    C,
+    config_toml,
+    default_config_toml,
+)
 from nanb.client import UnixDomainClient
 from nanb.server_manager import ServerManager
 from nanb.help_screen import HelpScreen
+from nanb.parser import load_file
 
 from nanb.widgets import (
     MarkdownSegment,
@@ -33,62 +41,6 @@ from nanb.widgets import (
 )
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-def split_to_cells(source) -> [Cell]:
-
-    source = source.rstrip()
-
-    out = []
-    lines = []
-    start_line = 0
-    celltype = "code"
-    cellname = None
-    for i, line in enumerate(source.split("\n")):
-        if line.startswith("# ---") or line.strip() == r"# %%%":
-            if lines:
-                if celltype == "markdown":
-                    lines = [l[1:] for l in lines]
-                out.append((celltype, cellname, start_line, i - 1, "\n".join(lines)))
-            cellname = line[5:].strip()
-            if cellname == "":
-                cellname = None
-            else:
-                cellname = cellname
-            if line.startswith("# ---"):
-                celltype = "code"
-            else:
-                celltype = "markdown"
-            start_line = i + 2  # skip the --- line
-            lines = []
-        else:
-            if celltype == "markdown":
-                if line != "" and not line.startswith("#"):
-                    raise Exception(
-                        f"Markdown cell at line {i} contains non-empty line that doesn't start with #"
-                    )
-            lines.append(line)
-    if lines:
-        if celltype == "markdown":
-            lines = [l[1:] for l in lines]
-        out.append((celltype, cellname, start_line, i - 1, "\n".join(lines)))
-
-    cells = []
-
-    for celltype, cellname, line_start, line_end, src in out:
-        if celltype == "markdown":
-            cells.append(MarkdownCell(cellname, src, line_start, line_end))
-        elif celltype == "code":
-            cells.append(CodeCell(cellname, src, line_start, line_end))
-        else:
-            raise Exception(f"Unknown cell type {celltype}")
-
-    return cells
-
-
-def load_file(filename: str) -> [Cell]:
-    with open(filename, "r") as f:
-        return split_to_cells(f.read())
 
 
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
@@ -206,18 +158,16 @@ class AppLogic:
                     await self.reload_source()
 
     async def reload_source(self):
-        with open(self.filename) as f:
-            try:
-                source = f.read()
-                new_cells = split_to_cells(source)
-                match_cells(self.cells, new_cells)
-                self.cells = new_cells
-                await self.cellsw.refresh_cells(self.cells)
-                self.output.use_cell(self.cellsw.current_cell)
-                self.clear_task_queue()
-            except Exception as exc:
-                print(exc)
-                self.exit(1)
+        try:
+            new_cells = load_file(self.filename)
+            match_cells(self.cells, new_cells)
+            self.cells = new_cells
+            await self.cellsw.refresh_cells(self.cells)
+            self.output.use_cell(self.cellsw.current_cell)
+            self.clear_task_queue()
+        except Exception as exc:
+            print(exc)
+            self.exit(1)
 
     @textual.work()
     async def run_code(self, cell: Cell):
@@ -249,7 +199,9 @@ def main():
     subp_run = subp.add_parser("run", help="Run a file")
     subp_run.add_argument("file", help="File to run")
 
-    subp_default_config = subp.add_parser("default-config", help="Print the default config")
+    subp_default_config = subp.add_parser(
+        "default-config", help="Print the default config"
+    )
     subp_default_config = subp.add_parser("config", help="Print the current config")
 
     args = argp.parse_args()
@@ -326,16 +278,21 @@ def main():
             return self._compose()
 
     if args.command == "run":
-        with open(args.file) as f:
-            source = f.read()
-            cells = split_to_cells(source)
-            App(cells, args.server_log_file, args.file).run()
+        if not os.path.exists(args.file):
+            sys.stderr.write(f"ERROR: File '{args.file}' does not exist\n")
+            sys.stderr.flush()
+            exit(1)
+            return
+        cells = load_file(args.file)
+        App(cells, args.server_log_file, args.file).run()
     elif args.command == "default-config":
         print(default_config_toml())
     elif args.command == "config":
         print(config_toml())
     else:
         sys.stderr.write(f"ERROR: Unknown command '{args.command}'\n")
+        sys.stderr.flush()
+        exit(1)
 
 
 if __name__ == "__main__":
