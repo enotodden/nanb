@@ -10,6 +10,8 @@ DEFAULT_KEYBINDINGS = {
     "copy": "y",
     "clear_cell_output": "c",
     "interrupt": "i",
+    "run_all": "ctrl+a",
+    "clear_all": "ctrl+x",
 }
 
 DEFAULT_SERVER_LOG_FILE = "/tmp/nanb_server.log"
@@ -21,27 +23,26 @@ DEFAULT_TR = {
     "action_clear_cell_output": "Clear Cell Output",
     "action_interrupt": "Interrupt",
     "action_help": "Help",
-
+    "action_run_cell": "Run Cell",
+    "action_run_all": "Run All",
+    "action_clear_all": "Clear All",
     # For closing the help screen
     "action_close": "Close",
-
     "state_running": "RUNNING",
     "state_pending": "PENDING",
-
     "dh_keybindings": "Keybindings",
     "dh_key": "Key",
     "dh_action": "Action",
-
     "kb_quit": "Quit the application",
     "kb_restart_kernel": "Restart the kernel",
     "kb_copy": "Copy selected output",
     "kb_clear_cell_output": "Clear the output of the current cell",
     "kb_interrupt": "Interrupt the current execution",
-
+    "kb_run_cell": "Run the current cell",
+    "kb_run_all": "Run all cells",
+    "kb_clear_all": "Clear all cells",
     "kb_help": "Show this help screen",
     "kb_arrows": "Move between cells",
-    "kb_enter": "Execute the current cell",
-
     "kb_close_help": "Close the help screen",
 }
 
@@ -56,17 +57,20 @@ DEFAULT_CELL_NAME_MAX = 20
 DEFAULT_OUTPUT_THEME = "vscode_dark"
 DEFAULT_OUTPUT_LINE_NUMBERS = False
 
+
 @dataclass
 class Config:
-    css: str                 = None
-    keybindings: dict        = field(default_factory=lambda: copy.deepcopy(DEFAULT_KEYBINDINGS))
-    server_log_file: str     = DEFAULT_SERVER_LOG_FILE
-    socket_prefix: str       = DEFAULT_SOCKET_PREFIX
-    tr: dict                 = field(default_factory=lambda: copy.deepcopy(DEFAULT_TR))
-    code_theme: str          = DEFAULT_CODE_THEME
-    code_background: str     = DEFAULT_CODE_BACKGROUND
-    cell_name_max: int       = DEFAULT_CELL_NAME_MAX
-    output_theme: str        = DEFAULT_OUTPUT_THEME
+    css: str = None
+    keybindings: dict = field(
+        default_factory=lambda: copy.deepcopy(DEFAULT_KEYBINDINGS)
+    )
+    server_log_file: str = DEFAULT_SERVER_LOG_FILE
+    socket_prefix: str = DEFAULT_SOCKET_PREFIX
+    tr: dict = field(default_factory=lambda: copy.deepcopy(DEFAULT_TR))
+    code_theme: str = DEFAULT_CODE_THEME
+    code_background: str = DEFAULT_CODE_BACKGROUND
+    cell_name_max: int = DEFAULT_CELL_NAME_MAX
+    output_theme: str = DEFAULT_OUTPUT_THEME
     output_line_numbers: bool = DEFAULT_OUTPUT_LINE_NUMBERS
 
     def keybinding_docs(self) -> str:
@@ -75,19 +79,58 @@ class Config:
             lines.append(f"| **{v}** | {self.tr['kb_' + k]} |")
         return "\n".join(lines)
 
-    def docs(self) -> str:
+    def help_md(self) -> str:
         return f"""
+Help
+====
+
+Find more detailed information at https://github.com/enotodden/nanb
+
 # {self.tr['dh_keybindings']}
 | Key | Action |
 | --- | ------ |
 {self.keybinding_docs()}
 |       |        |
 | ⬆︎ / ⬇︎ | {self.tr['kb_arrows']} |
-| ↵     | {self.tr['kb_enter']}  |
+| ↵     | {self.tr['kb_run_cell']}  |
 |       |        |
 | h     | {self.tr['kb_help']} |
 | h/ESC | {self.tr['kb_close_help']} |
+
+# Syntax
+
+### Code:
+
+Starting the a line with `# ---` denotes a code block:
+
+```python
+# ---
+
+print("Hello world")
+
+```
+
+### Markdown:
+
+Starting the a line with `# %%%` denotes a Markdown block:
+
+```python
+# %%%
+#
+# My Notebook
+# ===========
+#
+# Welcome to my **not-a-notebook**!
+#
+# - This
+# - is
+# - a
+# - list
+#
+```
+
 """
+
 
 def read_config(path: str) -> Config:
     if not os.path.exists(path):
@@ -130,12 +173,15 @@ def read_config(path: str) -> Config:
             if "output" in cfg:
                 output = cfg["output"]
                 c.output_theme = output.get("theme", DEFAULT_OUTPUT_THEME)
-                c.output_line_numbers = output.get("line_numbers", DEFAULT_OUTPUT_LINE_NUMBERS)
+                c.output_line_numbers = output.get(
+                    "line_numbers", DEFAULT_OUTPUT_LINE_NUMBERS
+                )
 
     return c
 
 
 C = Config()
+
 
 def load_config(path: str):
     c = read_config(path)

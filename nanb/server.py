@@ -18,8 +18,8 @@ if _ is not None:
     print(_)
 """
 
-class IO(io.IOBase):
 
+class IO(io.IOBase):
     def __init__(self, on_output):
         super().__init__()
         self.streampos = 0
@@ -73,29 +73,32 @@ class IO(io.IOBase):
         for line in lines:
             self.write(line)
 
+
 @dataclass
 class Header:
     source_bytes: int
     line_start: int
 
+
 def parse_header(header_data: str):
     source_bytes, line_start = header_data.split("%")
     return Header(int(source_bytes), int(line_start))
 
-class Runtime:
 
+class Runtime:
     def __init__(self):
         self.interpreter = code.InteractiveInterpreter()
         self.pid = None
         self.interrupted = None
 
         def interrupthandler(s, m_):
-            """ Interrupt the current running pid when receiving SIGUSR1"""
+            """Interrupt the current running pid when receiving SIGUSR1"""
             self.interrupted = self.runid
             os.kill(self.pid, signal.SIGINT)
+
         signal.signal(signal.SIGUSR1, interrupthandler)
 
-    def run_code(self, line_start:int, source: str, outfile: IO):
+    def run_code(self, line_start: int, source: str, outfile: IO):
         with contextlib.redirect_stdout(outfile):
             with contextlib.redirect_stderr(outfile):
                 # Set the current pid, so that we can knock it out
@@ -116,7 +119,7 @@ class Runtime:
 
                 # Run the script, except for the last expression if the last statement
                 # is an expression
-                self.interpreter.runsource(source, symbol='exec')
+                self.interpreter.runsource(source, symbol="exec")
 
                 # Don't keep running this cell if we were interrupted
                 if self.interrupted == self.runid:
@@ -125,7 +128,8 @@ class Runtime:
                 # If the last statement was an expression, it will be assigned to _
                 # and we print it
                 if last is not None:
-                    self.interpreter.runsource(last, symbol='exec')
+                    self.interpreter.runsource(last, symbol="exec")
+
 
 RUNTIME = Runtime()
 
@@ -158,8 +162,8 @@ class ServerHandler(socketserver.StreamRequestHandler):
             print("Connection closed")
             self.wfile.close()
 
-class UnixDomainServer:
 
+class UnixDomainServer:
     def __init__(self, filename):
         self.filename = filename
         if os.path.exists(filename):
@@ -183,6 +187,7 @@ class UnixDomainServer:
     def shutdown(self):
         self.server.shutdown()
 
+
 def main():
     argp = argparse.ArgumentParser()
     argp.add_argument("-m", "--mode", choices=["unix-domain"], default="unix-domain")
@@ -205,9 +210,11 @@ def main():
 
     def sighandler(s, m_):
         _thread.start_new_thread(stop_server, ())
+
     signal.signal(signal.SIGTERM, sighandler)
 
     server.run()
+
 
 if __name__ == "__main__":
     main()

@@ -15,6 +15,7 @@ import rich.table
 from nanb.cell import Cell
 from nanb.config import C
 
+
 class Segment(Widget):
     """
     Base class for a code or markdown segment
@@ -47,9 +48,10 @@ class Segment(Widget):
         if self.cell.name is not None:
             cellname = self.cell.name
             if len(cellname) > C.cell_name_max:
-                cellname = cellname[:C.cell_name_max] + "..."
+                cellname = cellname[: C.cell_name_max] + "..."
             return f"{cellname} - {self.idx+1}{state}"
         return f"{self.idx+1}{state}"
+
 
 class MarkdownSegment(Segment):
     """
@@ -60,12 +62,11 @@ class MarkdownSegment(Segment):
         assert self.cell.cell_type == "markdown"
         self.label = Label(self.make_label_text(), classes="celllabel")
         self.content = Markdown(
-            self.cell.source,
-            classes='markdowncell',
-            id=f"cell_{self.idx}"
+            self.cell.source, classes="markdowncell", id=f"cell_{self.idx}"
         )
         yield self.label
         yield self.content
+
 
 class CodeSegment(Segment):
     """
@@ -74,16 +75,20 @@ class CodeSegment(Segment):
 
     def compose(self) -> ComposeResult:
         self.label = Label(self.make_label_text(), classes="celllabel")
-        self.content = Static(renderable=Syntax(
-            self.cell.source,
-            "python",
-            line_numbers=True,
-            start_line=self.cell.line_start,
-            word_wrap=True,
-            indent_guides=True,
-            theme=C.code_theme,
-            background_color=C.code_background,
-        ), classes='codecell', id=f"cell_{self.idx}")
+        self.content = Static(
+            renderable=Syntax(
+                self.cell.source,
+                "python",
+                line_numbers=True,
+                start_line=self.cell.line_start,
+                word_wrap=True,
+                indent_guides=True,
+                theme=C.code_theme,
+                background_color=C.code_background,
+            ),
+            classes="codecell",
+            id=f"cell_{self.idx}",
+        )
         yield self.label
         yield self.content
 
@@ -95,6 +100,7 @@ class Spinner(Static):
     Borrowed from this lovely blog post by Rodrigo Girão Serrão:
         https://textual.textualize.io/blog/2022/11/24/spinners-and-progress-bars-in-textual/
     """
+
     DEFAULT_CSS = """
     Spinner {
         content-align: right middle;
@@ -102,6 +108,7 @@ class Spinner(Static):
         padding-right: 1;
     }
     """
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(**kwargs)
         self.style = "point"
@@ -119,10 +126,13 @@ class Spinner(Static):
     def resume(self) -> None:
         self.interval_update.resume()
 
+
 def write_to_clipboard(output):
     process = subprocess.Popen(
-        'pbcopy', env={'LANG': 'en_US.UTF-8'}, stdin=subprocess.PIPE)
-    process.communicate(output.encode('utf-8'))
+        "pbcopy", env={"LANG": "en_US.UTF-8"}, stdin=subprocess.PIPE
+    )
+    process.communicate(output.encode("utf-8"))
+
 
 class Output(TextArea):
     """
@@ -152,7 +162,7 @@ class Output(TextArea):
         self.write(cell.output)
 
     def replace(self, *args, **kwargs):
-        """ Makes the textarea non-editable """
+        """Makes the textarea non-editable"""
         return None
 
     def write(self, text):
@@ -162,9 +172,7 @@ class Output(TextArea):
         self.scroll_cursor_visible()
 
 
-
 class FooterSpinner(rich.spinner.Spinner):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.paused = False
@@ -205,8 +213,8 @@ class FooterSpinner(rich.spinner.Spinner):
             table.add_row(frame, self.text)
             return table
 
-class FooterWithSpinner(Footer):
 
+class FooterWithSpinner(Footer):
     def on_mount(self):
         if self._key_text is None:
             self._key_text = self._make_key_text()
@@ -228,5 +236,3 @@ class FooterWithSpinner(Footer):
 
     def render(self):
         return self.renderable
-
-

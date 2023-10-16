@@ -26,6 +26,7 @@ from nanb.widgets import MarkdownSegment, CodeSegment, Output, FooterWithSpinner
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 def split_to_cells(source) -> [Cell]:
 
     source = source.rstrip()
@@ -40,7 +41,7 @@ def split_to_cells(source) -> [Cell]:
             if lines:
                 if celltype == "markdown":
                     lines = [l[1:] for l in lines]
-                out.append((celltype, cellname, start_line, i-1, "\n".join(lines)))
+                out.append((celltype, cellname, start_line, i - 1, "\n".join(lines)))
             cellname = line[5:].strip()
             if cellname == "":
                 cellname = None
@@ -50,17 +51,19 @@ def split_to_cells(source) -> [Cell]:
                 celltype = "code"
             else:
                 celltype = "markdown"
-            start_line = i+2 # skip the --- line
+            start_line = i + 2  # skip the --- line
             lines = []
         else:
             if celltype == "markdown":
                 if line != "" and not line.startswith("#"):
-                    raise Exception(f"Markdown cell at line {i} contains non-empty line that doesn't start with #")
+                    raise Exception(
+                        f"Markdown cell at line {i} contains non-empty line that doesn't start with #"
+                    )
             lines.append(line)
     if lines:
         if celltype == "markdown":
             lines = [l[1:] for l in lines]
-        out.append((celltype, cellname, start_line, i-1, "\n".join(lines)))
+        out.append((celltype, cellname, start_line, i - 1, "\n".join(lines)))
 
     cells = []
 
@@ -73,6 +76,7 @@ def split_to_cells(source) -> [Cell]:
             raise Exception(f"Unknown cell type {celltype}")
 
     return cells
+
 
 def load_file(filename: str) -> [Cell]:
     with open(filename, "r") as f:
@@ -91,7 +95,7 @@ class Cells(textual.containers.VerticalScroll):
         widgets = []
         for i, cell in enumerate(self.cells):
             classes = "segment"
-            if i == len(self.cells)-1:
+            if i == len(self.cells) - 1:
                 classes += " last"
             if i == 0:
                 classes += " first"
@@ -136,8 +140,6 @@ class Cells(textual.containers.VerticalScroll):
         elif event.key == "down":
             if self.currently_focused < len(self.widgets) - 1:
                 self.focus_idx(self.currently_focused + 1)
-        if event.key == "enter":
-            self.on_run_code(self.widgets[self.currently_focused])
 
     @property
     def current(self):
@@ -158,16 +160,16 @@ class Cells(textual.containers.VerticalScroll):
         self.mount(*self.widgets)
         self.focus_idx(0)
 
-    def clear_current_cell_output(self):
-        if self.current:
-            self.current.cell.output = ""
-            self.on_output(self.current.cell)
+    def set_cell_state(self, cell: Cell, state: str):
+        for w in self.widgets:
+            if w.cell == cell:
+                w.state = state
 
 
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
 
-class ServerManager:
 
+class ServerManager:
     def __init__(self):
         self.socket_file = None
         self.server_log_file = open(C.server_log_file, "w")
@@ -178,16 +180,11 @@ class ServerManager:
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        self.server = subprocess.Popen([
-                sys.executable,
-                "-m",
-                "nanb.server",
-                "--socket-file",
-                self.socket_file
-            ],
+        self.server = subprocess.Popen(
+            [sys.executable, "-m", "nanb.server", "--socket-file", self.socket_file],
             stdout=self.server_log_file,
             stderr=self.server_log_file,
-            env=env
+            env=env,
         )
 
         # Wait until the server comes up and starts listening
@@ -219,19 +216,176 @@ class HelpScreen(textual.screen.Screen):
         Binding(key="escape", action="esc", description="Close"),
         Binding(key="h", action="esc", description="Close"),
     ]
+
     def compose(self):
-        yield textual.widgets.MarkdownViewer(C.docs(), show_table_of_contents=True)
+        mdv = textual.widgets.MarkdownViewer(C.help_md(), show_table_of_contents=True)
+
+        # FIXME: Links in textual raises an exception, as they are treated as
+        #        file paths, so just nop out the function that causes trouble for now.
+        async def nop_linkclick(*args):
+            pass
+
+        mdv.go = nop_linkclick
+
+        yield mdv
 
     def action_esc(self):
         self.app.pop_screen()
 
+    def on_markdown_link_clicked(self, link):
+        exit(0)
+
+
+class AppLogic:
+    def __init__(self, cells, server_log_file, filename, *args, **kwargs):
+        self.is_running_code = False
+        self.output = None
+        self.CSS = CSS
+        if C.css is not None:
+            self.CSS += "\n" + C.css
+        self.cells = cells
+        self.filename = filename
+        self.task_queue = asyncio.Queue()
+        self.sm = ServerManager()
+        self.sm.start()
+        self.client = UnixDomainClient(self.sm.socket_file)
+
+    def exit(self, *args, **kwargs):
+        self.sm.stop()
+        super().exit(*args, **kwargs)
+
+    def action_help(self):
+        self.push_screen(HelpScreen())
+
+    def action_restart_kernel(self):
+        self.footer.resume_spinner()
+        self.clear_task_queue()
+        self.sm.restart()
+        self.client = UnixDomainClient(self.sm.socket_file)
+        self.footer.pause_spinner()
+
+    def action_interrupt(self):
+        self.footer.resume_spinner()
+        self.clear_task_queue()
+        self.sm.interrupt()
+        self.footer.pause_spinner()
+
+    def action_clear_cell_output(self):
+        if self.cellsw.current:
+            self.cellsw.current.cell.output = ""
+            self.on_output(self.cellsw.current.cell)
+
+    def action_clear_all(self):
+        for cell in self.cells:
+            cell.output = ""
+            self.on_output(self.cellsw.current.cell)
+
+    def action_run_all(self):
+        for cell in self.cells:
+            self.run_code(cell)
+
+    def action_run_cell(self):
+        self.run_code(self.cellsw.current.cell)
+
+    def on_output(self, cell: Cell):
+        self.output.use_cell(cell)
+
+    def on_mount(self):
+        self.footer.pause_spinner()
+
+    def _compose(self):
+        with textual.containers.Container(id="app-grid"):
+            self.cellsw = Cells(self.cells, id="cells")
+            self.cellsw.on_output = self.on_output
+            yield self.cellsw
+            with textual.containers.Container(id="output"):
+                self.output = Output()
+                yield self.output
+        self.footer = FooterWithSpinner()
+        yield self.footer
+
+        loop = asyncio.get_event_loop()
+        self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
+        self.watch_sourcefile_task = asyncio.create_task(self.watch_sourcefile())
+
+    async def process_task_queue(self):
+        while True:
+            cell = await self.task_queue.get()
+            loop = asyncio.get_event_loop()
+            cell.output = ""
+            self.cellsw.set_cell_state(cell, C.tr["state_running"])
+
+            q = asyncio.Queue()
+            task = loop.create_task(
+                self.client.run_code(cell.line_start, cell.source, q)
+            )
+
+            started = False
+
+            self.footer.resume_spinner()
+            while not task.done():
+                try:
+                    result = await asyncio.wait_for(q.get(), timeout=0.2)
+                    if not result:
+                        continue
+                    if not started:
+                        started = True
+                        cell.output = ""
+                        self.cellsw.set_cell_state(cell, C.tr["state_running"])
+                    cell.output += result
+
+                    self.output.use_cell(self.cellsw.current.cell)
+                except asyncio.TimeoutError:
+                    pass
+            self.footer.pause_spinner()
+            self.cellsw.set_cell_state(cell, "")
+
+    async def watch_sourcefile(self):
+        async for changes in awatch(self.filename):
+            for change, _ in changes:
+                if change == 2:
+                    await self.reload_source()
+
+    async def reload_source(self):
+        with open(self.filename) as f:
+            try:
+                source = f.read()
+                new_cells = split_to_cells(source)
+                match_cells(self.cells, new_cells)
+                self.cells = new_cells
+                await self.cellsw.refresh_cells(self.cells)
+                self.output.use_cell(self.cellsw.current.cell)
+                self.clear_task_queue()
+            except Exception as exc:
+                print(exc)
+                self.exit(1)
+
+    @textual.work()
+    async def run_code(self, cell: Cell):
+        if cell.cell_type != "code":
+            return
+        self.cellsw.set_cell_state(cell, C.tr["state_pending"])
+        await self.task_queue.put(cell)
+
+    def clear_task_queue(self):
+        while not self.task_queue.empty():
+            try:
+                self.task_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        for w in self.cellsw.widgets:
+            w.state = ""
+
+
 def main():
 
     argp = argparse.ArgumentParser()
-    argp.add_argument("-c", "--config-dir", default=os.path.join(os.path.expanduser("~"), ".nanb"))
+    argp.add_argument(
+        "-c", "--config-dir", default=os.path.join(os.path.expanduser("~"), ".nanb")
+    )
     argp.add_argument("-L", "--server-log-file", default="nanb_server.log")
 
-    subp = argp.add_subparsers(dest='command', required=True)
+    subp = argp.add_subparsers(dest="command", required=True)
 
     subp_run = subp.add_parser("run")
     subp_run.add_argument("file")
@@ -239,7 +393,9 @@ def main():
     args = argp.parse_args()
 
     if not os.path.exists(args.config_dir):
-        sys.stderr.write(f"ERROR: Config directory '{args.config_dir}' does not exist\n")
+        sys.stderr.write(
+            f"ERROR: Config directory '{args.config_dir}' does not exist\n"
+        )
         sys.exit(1)
         return
 
@@ -247,148 +403,65 @@ def main():
 
     # FIXME: This is dumb, but textual lacks support for dynamic bindings it seems,
     # although there does appear to be a fix in the works, for now we'll
-    # just shove it in here
-    class App(textual.app.App):
+    # just shove it in here.
+    # The rest of what would usually be in App, is in AppLogic
+    class App(textual.app.App, AppLogic):
 
         BINDINGS = [
-            #Binding(key="ctrl+s", action="save", description="Save output 💾"),
-            Binding(key=C.keybindings["copy"], action="", description=C.tr["action_copy"]),
-
-            Binding(key=C.keybindings["clear_cell_output"], action="clear_cell_output", description=C.tr["action_clear_cell_output"]),
-            Binding(key=C.keybindings["interrupt"], action="interrupt", description=C.tr["action_interrupt"]),
-
-            Binding(key=C.keybindings["restart_kernel"], action="restart_kernel", description=C.tr["action_restart_kernel"]),
-            Binding(key=C.keybindings["quit"], action="quit", description=C.tr["action_quit"]),
-
+            # Binding(key="ctrl+s", action="save", description="Save output 💾"),
+            Binding(
+                key=C.keybindings["copy"],
+                action="",
+                description=C.tr["action_copy"],
+                show=False,
+            ),
+            Binding(
+                key=C.keybindings["clear_all"],
+                action="clear_all",
+                description=C.tr["action_clear_all"],
+                show=False,
+            ),
+            Binding(
+                key=C.keybindings["clear_cell_output"],
+                action="clear_cell_output",
+                description=C.tr["action_clear_cell_output"],
+                show=False,
+            ),
+            Binding(
+                key=C.keybindings["interrupt"],
+                action="interrupt",
+                description=C.tr["action_interrupt"],
+            ),
+            Binding(
+                key=C.keybindings["restart_kernel"],
+                action="restart_kernel",
+                description=C.tr["action_restart_kernel"],
+            ),
+            Binding(
+                key=C.keybindings["quit"],
+                action="quit",
+                description=C.tr["action_quit"],
+            ),
+            Binding(
+                key=C.keybindings["run_all"],
+                action="run_all",
+                description=C.tr["action_run_all"],
+            ),
+            Binding(
+                key="enter",
+                action="run_cell",
+                description=C.tr["action_run_cell"],
+                show=False,
+            ),
             Binding(key="h", action="help", description=C.tr["action_help"]),
         ]
 
         def __init__(self, cells, server_log_file, filename, *args, **kwargs):
-            self.is_running_code = False
-            self.output = None
-            self.CSS = CSS
-            if C.css is not None:
-                self.CSS += "\n" + C.css
-            self.cells = cells
-            self.filename = filename
-            self.task_queue = asyncio.Queue()
-            self.sm = ServerManager()
-            self.sm.start()
-            self.client = UnixDomainClient(self.sm.socket_file)
-
-            super().__init__(*args, **kwargs)
-
-        def exit(self, *args, **kwargs):
-            self.sm.stop()
-            super().exit(*args, **kwargs)
-
-        def action_help(self):
-            self.push_screen(HelpScreen())
-
-        def action_restart_kernel(self):
-            self.footer.resume_spinner()
-            self.clear_task_queue()
-            self.sm.restart()
-            self.client = UnixDomainClient(self.sm.socket_file)
-            self.footer.pause_spinner()
-
-        def action_interrupt(self):
-            self.footer.resume_spinner()
-            self.clear_task_queue()
-            self.sm.interrupt()
-            self.footer.pause_spinner()
-
-        def action_clear_cell_output(self):
-            self.cellsw.clear_current_cell_output()
-
-        def on_output(self, cell: Cell):
-            self.output.use_cell(cell)
-
-        def on_mount(self):
-            self.footer.pause_spinner()
+            AppLogic.__init__(self, cells, server_log_file, filename)
+            textual.app.App.__init__(self, *args, **kwargs)
 
         def compose(self) -> textual.app.ComposeResult:
-            with textual.containers.Container(id="app-grid"):
-                self.cellsw = Cells(self.cells, id="cells")
-                self.cellsw.on_output = self.on_output
-                self.cellsw.on_run_code = self.run_code
-                yield self.cellsw
-                with textual.containers.Container(id="output"):
-                    self.output = Output()
-                    yield self.output
-            self.footer = FooterWithSpinner()
-            yield self.footer
-
-            loop = asyncio.get_event_loop()
-            self.process_task_queue_task = asyncio.create_task(self.process_task_queue())
-            self.watch_sourcefile_task = asyncio.create_task(self.watch_sourcefile())
-
-        async def process_task_queue(self):
-            while True:
-                w = await self.task_queue.get()
-                loop = asyncio.get_event_loop()
-                w.cell.output = ""
-                w.state = C.tr["state_running"]
-
-                q = asyncio.Queue()
-                task = loop.create_task(self.client.run_code(w.cell.line_start, w.cell.source, q))
-
-                started = False
-
-                self.footer.resume_spinner()
-                while not task.done():
-                    try:
-                        result = await asyncio.wait_for(q.get(), timeout=0.2)
-                        if not result:
-                            continue
-                        if not started:
-                            started = True
-                            w.cell.output = ""
-                            w.state = C.tr["state_running"]
-                        w.cell.output += result
-
-                        self.output.use_cell(self.cellsw.current.cell)
-                    except asyncio.TimeoutError:
-                        pass
-                self.footer.pause_spinner()
-                w.state = ""
-
-        async def watch_sourcefile(self):
-            async for changes in awatch(self.filename):
-                for change, _ in changes:
-                    if change == 2:
-                        await self.reload_source()
-
-        async def reload_source(self):
-            with open(self.filename) as f:
-                try:
-                    source = f.read()
-                    new_cells = split_to_cells(source)
-                    match_cells(self.cells, new_cells)
-                    self.cells = new_cells
-                    await self.cellsw.refresh_cells(self.cells)
-                    self.output.use_cell(self.cellsw.current.cell)
-                    self.clear_task_queue()
-                except Exception as exc:
-                    print(exc)
-                    self.exit(1)
-
-        @textual.work()
-        async def run_code(self, w):
-            if w.cell.cell_type != "code":
-                return
-            w.state = C.tr["state_pending"]
-            await self.task_queue.put(w)
-
-        def clear_task_queue(self):
-            while not self.task_queue.empty():
-                try:
-                    self.task_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-            for w in self.cellsw.widgets:
-                w.state = ""
-
+            return self._compose()
 
     if args.command == "run":
         with open(args.file) as f:
@@ -397,6 +470,7 @@ def main():
             App(cells, args.server_log_file, args.file).run()
     else:
         sys.stderr.write(f"ERROR: Unknown command '{args.command}'\n")
+
 
 if __name__ == "__main__":
     main()

@@ -2,8 +2,8 @@ import socket
 import asyncio
 import argparse
 
-class UnixDomainClient:
 
+class UnixDomainClient:
     def __init__(self, filename):
         self.filename = filename
         self.socket = None
@@ -46,4 +46,3 @@ if __name__ == "__main__":
     asyncio.run(client.run_code(0, "print('Hello, world!')", q))
     while not q.empty():
         print(q.get_nowait())
-

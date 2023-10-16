@@ -1,6 +1,7 @@
 import uuid
 import hashlib
 
+
 class Cell:
     cell_type = None
 
@@ -13,7 +14,12 @@ class Cell:
         self.id = uuid.uuid4().hex
 
     def __str__(self):
-        source_numbered = "\n".join([f"{self.line_start+i+1} {line}" for i, line in enumerate(self.source.split("\n"))])
+        source_numbered = "\n".join(
+            [
+                f"{self.line_start+i+1} {line}"
+                for i, line in enumerate(self.source.split("\n"))
+            ]
+        )
         return f"<{self.__class__.__name__} {self.line_start}-{self.line_end}:\n{source_numbered}\n>"
 
     def __repr__(self):
@@ -32,11 +38,14 @@ class Cell:
         hash_input = self.source.strip()
         return hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
+
 class MarkdownCell(Cell):
     cell_type = "markdown"
 
+
 class CodeCell(Cell):
     cell_type = "code"
+
 
 def match_cells(old_cells: [Cell], new_cells: [Cell]):
     for nc in new_cells:
