@@ -21,8 +21,16 @@ from watchfiles import awatch
 from nanb.cell import Cell, MarkdownCell, CodeCell, match_cells
 from nanb.config import Config, read_config, load_config, C
 from nanb.client import UnixDomainClient
+from nanb.server_manager import ServerManager
+from nanb.help_screen import HelpScreen
 
-from nanb.widgets import MarkdownSegment, CodeSegment, Output, FooterWithSpinner
+from nanb.widgets import (
+    MarkdownSegment,
+    CodeSegment,
+    Output,
+    FooterWithSpinner,
+    CellList,
+)
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -83,157 +91,7 @@ def load_file(filename: str) -> [Cell]:
         return split_to_cells(f.read())
 
 
-class Cells(textual.containers.VerticalScroll):
-
-    cells = textual.reactive.var([])
-
-    def __init__(self, cells, **kwargs):
-        self.cells = cells
-        super().__init__(**kwargs)
-
-    def make_widgets(self):
-        widgets = []
-        for i, cell in enumerate(self.cells):
-            classes = "segment"
-            if i == len(self.cells) - 1:
-                classes += " last"
-            if i == 0:
-                classes += " first"
-            if cell.cell_type == "markdown":
-                w = MarkdownSegment(i, cell, classes=classes, id=f"segment_{i}")
-            elif cell.cell_type == "code":
-                w = CodeSegment(i, cell, classes=classes, id=f"segment_{i}")
-            w.on_clicked = self.on_segment_clicked
-            widgets.append(w)
-        return widgets
-
-    def focus_cell(self, cell: Cell):
-        for i, w in enumerate(self.widgets):
-            if w.cell == cell:
-                self.currently_focused = i
-                w.focus()
-                self.on_output(w.cell)
-                break
-
-    def focus_widget(self, w):
-        self.focus_cell(w.cell)
-
-    def focus_idx(self, idx):
-        self.focus_cell(self.cells[idx])
-
-    def compose(self) -> textual.app.ComposeResult:
-        widgets = self.make_widgets()
-        self.widgets = widgets
-        for w in widgets:
-            yield w
-
-    def on_segment_clicked(self, w):
-        self.focus_widget(w)
-
-    def on_mount(self):
-        self.focus_idx(0)
-
-    async def on_key(self, event: textual.events.Key) -> None:
-        if event.key == "up":
-            if self.currently_focused > 0:
-                self.focus_idx(self.currently_focused - 1)
-        elif event.key == "down":
-            if self.currently_focused < len(self.widgets) - 1:
-                self.focus_idx(self.currently_focused + 1)
-
-    @property
-    def current(self):
-        if self.currently_focused is None:
-            return None
-        return self.widgets[self.currently_focused]
-
-    def clear(self):
-        q = self.query(".segment")
-        await_remove = q.remove()
-        self.currently_focused = None
-        return await_remove
-
-    async def refresh_cells(self, cells):
-        self.cells = cells
-        self.widgets = self.make_widgets()
-        await self.clear()
-        self.mount(*self.widgets)
-        self.focus_idx(0)
-
-    def set_cell_state(self, cell: Cell, state: str):
-        for w in self.widgets:
-            if w.cell == cell:
-                w.state = state
-
-
 CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
-
-
-class ServerManager:
-    def __init__(self):
-        self.socket_file = None
-        self.server_log_file = open(C.server_log_file, "w")
-
-    def start(self):
-        socket_uuid = uuid.uuid4().hex
-        self.socket_file = C.socket_prefix + socket_uuid
-
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        self.server = subprocess.Popen(
-            [sys.executable, "-m", "nanb.server", "--socket-file", self.socket_file],
-            stdout=self.server_log_file,
-            stderr=self.server_log_file,
-            env=env,
-        )
-
-        # Wait until the server comes up and starts listening
-        while True:
-            if os.path.exists(self.socket_file):
-                break
-            time.sleep(0.1)
-
-    def stop(self):
-        self.server.terminate()
-        try:
-            self.server.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            self.server.kill()
-            self.server.wait()
-        if os.path.exists(self.socket_file):
-            os.remove(self.socket_file)
-
-    def restart(self):
-        self.stop()
-        self.start()
-
-    def interrupt(self):
-        self.server.send_signal(signal.SIGUSR1)
-
-
-class HelpScreen(textual.screen.Screen):
-    BINDINGS = [
-        Binding(key="escape", action="esc", description="Close"),
-        Binding(key="h", action="esc", description="Close"),
-    ]
-
-    def compose(self):
-        mdv = textual.widgets.MarkdownViewer(C.help_md(), show_table_of_contents=True)
-
-        # FIXME: Links in textual raises an exception, as they are treated as
-        #        file paths, so just nop out the function that causes trouble for now.
-        async def nop_linkclick(*args):
-            pass
-
-        mdv.go = nop_linkclick
-
-        yield mdv
-
-    def action_esc(self):
-        self.app.pop_screen()
-
-    def on_markdown_link_clicked(self, link):
-        exit(0)
 
 
 class AppLogic:
@@ -271,21 +129,22 @@ class AppLogic:
         self.footer.pause_spinner()
 
     def action_clear_cell_output(self):
-        if self.cellsw.current:
-            self.cellsw.current.cell.output = ""
-            self.on_output(self.cellsw.current.cell)
+        if self.cellsw.current_cell is not None:
+            self.cellsw.current_cell.output = ""
+            self.on_output(self.cellsw.current_cell)
 
     def action_clear_all(self):
         for cell in self.cells:
             cell.output = ""
-            self.on_output(self.cellsw.current.cell)
+        if self.cellsw.current_cell is not None:
+            self.on_output(self.cellsw.current_cell)
 
     def action_run_all(self):
         for cell in self.cells:
             self.run_code(cell)
 
     def action_run_cell(self):
-        self.run_code(self.cellsw.current.cell)
+        self.run_code(self.cellsw.current_cell)
 
     def on_output(self, cell: Cell):
         self.output.use_cell(cell)
@@ -295,7 +154,7 @@ class AppLogic:
 
     def _compose(self):
         with textual.containers.Container(id="app-grid"):
-            self.cellsw = Cells(self.cells, id="cells")
+            self.cellsw = CellList(self.cells, id="cells")
             self.cellsw.on_output = self.on_output
             yield self.cellsw
             with textual.containers.Container(id="output"):
@@ -334,7 +193,7 @@ class AppLogic:
                         self.cellsw.set_cell_state(cell, C.tr["state_running"])
                     cell.output += result
 
-                    self.output.use_cell(self.cellsw.current.cell)
+                    self.output.use_cell(self.cellsw.current_cell)
                 except asyncio.TimeoutError:
                     pass
             self.footer.pause_spinner()
@@ -354,7 +213,7 @@ class AppLogic:
                 match_cells(self.cells, new_cells)
                 self.cells = new_cells
                 await self.cellsw.refresh_cells(self.cells)
-                self.output.use_cell(self.cellsw.current.cell)
+                self.output.use_cell(self.cellsw.current_cell)
                 self.clear_task_queue()
             except Exception as exc:
                 print(exc)

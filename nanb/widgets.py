@@ -6,6 +6,8 @@ from textual.app import ComposeResult
 from textual.events import Click
 from textual.reactive import var
 from textual.binding import Binding
+from textual.containers import VerticalScroll
+import textual.events
 
 from rich.syntax import Syntax
 import rich.spinner
@@ -236,3 +238,83 @@ class FooterWithSpinner(Footer):
 
     def render(self):
         return self.renderable
+
+
+class CellList(VerticalScroll):
+
+    cells = var([])
+
+    def __init__(self, cells, **kwargs):
+        self.cells = cells
+        super().__init__(**kwargs)
+
+    def make_widgets(self):
+        widgets = []
+        for i, cell in enumerate(self.cells):
+            classes = "segment"
+            if i == len(self.cells) - 1:
+                classes += " last"
+            if i == 0:
+                classes += " first"
+            if cell.cell_type == "markdown":
+                w = MarkdownSegment(i, cell, classes=classes, id=f"segment_{i}")
+            elif cell.cell_type == "code":
+                w = CodeSegment(i, cell, classes=classes, id=f"segment_{i}")
+            w.on_clicked = self.on_segment_clicked
+            widgets.append(w)
+        return widgets
+
+    def focus_cell(self, cell: Cell):
+        for i, w in enumerate(self.widgets):
+            if w.cell == cell:
+                self.currently_focused = i
+                w.focus()
+                self.on_output(w.cell)
+                break
+
+    def focus_idx(self, idx):
+        self.focus_cell(self.cells[idx])
+
+    def compose(self) -> ComposeResult:
+        widgets = self.make_widgets()
+        self.widgets = widgets
+        for w in widgets:
+            yield w
+
+    def on_segment_clicked(self, w):
+        self.focus_cell(w.cell)
+
+    def on_mount(self):
+        self.focus_idx(0)
+
+    async def on_key(self, event: textual.events.Key) -> None:
+        if event.key == "up":
+            if self.currently_focused > 0:
+                self.focus_idx(self.currently_focused - 1)
+        elif event.key == "down":
+            if self.currently_focused < len(self.widgets) - 1:
+                self.focus_idx(self.currently_focused + 1)
+
+    @property
+    def current_cell(self):
+        if self.currently_focused is None:
+            return None
+        return self.cells[self.currently_focused]
+
+    def clear(self):
+        q = self.query(".segment")
+        await_remove = q.remove()
+        self.currently_focused = None
+        return await_remove
+
+    async def refresh_cells(self, cells):
+        self.cells = cells
+        self.widgets = self.make_widgets()
+        await self.clear()
+        self.mount(*self.widgets)
+        self.focus_idx(0)
+
+    def set_cell_state(self, cell: Cell, state: str):
+        for w in self.widgets:
+            if w.cell == cell:
+                w.state = state
