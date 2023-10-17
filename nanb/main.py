@@ -47,7 +47,7 @@ CSS = open(os.path.join(THIS_DIR, "nanb.css")).read()
 
 
 class AppLogic:
-    def __init__(self, cells, server_log_file, filename, *args, **kwargs):
+    def __init__(self, cells, filename, *args, **kwargs):
         self.is_running_code = False
         self.output = None
         self.CSS = CSS
@@ -190,9 +190,17 @@ def main():
 
     argp = argparse.ArgumentParser()
     argp.add_argument(
-        "-c", "--config-dir", default=os.path.join(os.path.expanduser("~"), ".nanb")
+        "-C", "--config-dir", default=os.path.join(os.path.expanduser("~"), ".nanb")
     )
-    argp.add_argument("-L", "--server-log-file", default="nanb_server.log")
+    argp.add_argument(
+        "-c",
+        "--config",
+        nargs=2,
+        metavar=("path", "value"),
+        action="append",
+        default=[],
+        help="Set config options by path and value",
+    )
 
     subp = argp.add_subparsers(dest="command", required=True, help="Command")
 
@@ -214,6 +222,9 @@ def main():
         return
 
     load_config(args.config_dir)
+
+    for path, val in args.config:
+        C.set_by_path(path, val)
 
     # FIXME: This is dumb, but textual lacks support for dynamic bindings it seems,
     # although there does appear to be a fix in the works, for now we'll
@@ -270,8 +281,8 @@ def main():
             Binding(key="h", action="help", description=C.tr["action_help"]),
         ]
 
-        def __init__(self, cells, server_log_file, filename, *args, **kwargs):
-            AppLogic.__init__(self, cells, server_log_file, filename)
+        def __init__(self, cells, filename, *args, **kwargs):
+            AppLogic.__init__(self, cells, filename)
             textual.app.App.__init__(self, *args, **kwargs)
 
         def compose(self) -> textual.app.ComposeResult:
@@ -284,7 +295,7 @@ def main():
             exit(1)
             return
         cells = load_file(args.file)
-        App(cells, args.server_log_file, args.file).run()
+        App(cells, args.file).run()
     elif args.command == "default-config":
         print(default_config_toml())
     elif args.command == "config":

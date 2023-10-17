@@ -73,6 +73,77 @@ class Config:
     output_theme: str = DEFAULT_OUTPUT_THEME
     output_line_numbers: bool = DEFAULT_OUTPUT_LINE_NUMBERS
 
+    def set_by_path(self, path: str, value):
+        parts = path.split(".")
+
+        if path == "cell_name_max":
+            if not hasattr(self, parts[0]):
+                raise ValueError(f"Invalid config path: '{path}'")
+            setattr(self, parts[0], int(value))
+            return
+
+        if parts[0] == "tr":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid config path: '{path}'")
+            if parts[1] not in self.tr:
+                raise ValueError(
+                    f"Invalid config path: '{path}'. Invalid translation key '{parts[1]}'"
+                )
+            self.tr[parts[1]] = value
+            return
+
+        if parts[0] == "keybindings":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid config path: '{path}'")
+            if parts[1] not in self.keybindings:
+                raise ValueError(
+                    f"Invalid config path: '{path}'. Invalid keybinding key '{parts[1]}'"
+                )
+            self.keybindings[parts[1]] = value
+            return
+
+        if path == "server.log_file":
+            self.server_log_file = value
+            return
+        if parts[0] == "server":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid config path: '{path}'")
+            if parts[1] not in ["socket_prefix"]:
+                raise ValueError(f"Invalid config path: '{path}'")
+            setattr(self, "server_" + parts[1], value)
+            return
+
+        if parts[0] == "code":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid config path: '{path}'")
+            if parts[1] not in ["theme", "background"]:
+                raise ValueError(
+                    f"Invalid config path: '{path}'. Invalid code key '{parts[1]}'"
+                )
+            setattr(self, "code_" + parts[1], value)
+            return
+
+        if parts[0] == "output":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid config path: '{path}'")
+            if parts[1] not in ["theme", "line_numbers"]:
+                raise ValueError(
+                    f"Invalid config path: '{path}'. Invalid output key '{parts[1]}'"
+                )
+            if parts[1] == "line_numbers":
+                if value.lower() in ["true", "yes"]:
+                    value = True
+                elif value.lower() in ["false", "no"]:
+                    value = False
+                else:
+                    raise ValueError(
+                        f"Invalid config path: '{path}'. Invalid output line_numbers value '{value}'"
+                    )
+            setattr(self, "output_" + parts[1], value)
+            return
+
+        raise ValueError(f"Invalid config path: {path}")
+
     def keybinding_docs(self) -> str:
         lines = []
         for k, v in self.keybindings.items():
