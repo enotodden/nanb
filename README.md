@@ -174,7 +174,6 @@ kb_close_help = "Close the help screen"
     - `copy`: Key combination used to copy selected text from the output.
     - `clear_cell_output`: Key combination used to clear a single cell of output.
     - `interrupt`: Key combination used to interrupt current execution.
-    - `interrupt`: Interrupt current executing cell, and discard any pending executions.
     - `run_all`: Run all cells.
     - `clear_all:` = Clear output from all cells.
 - `tr`: Strings/translations used to render state info and help text.
