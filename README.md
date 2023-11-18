@@ -3,7 +3,7 @@ nanb - Not A NoteBook
 
 Jupyter-style execution with plain Python files, in the terminal.
 
-![screenshot](https://github.com/enotodden/nanb/blob/e9a553cca8a0411120ac13cb036b82c27c473723/nanb_screenshot.png)
+![screenshot](https://github.com/enotodden/nanb/blob/09570785cb135ccbb74ba787f1177b54639786d2/nanb_screenshot.png)
 
 Example:
 
