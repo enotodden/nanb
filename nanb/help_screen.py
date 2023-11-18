@@ -2,6 +2,8 @@ from textual.screen import Screen
 from textual.binding import Binding
 from textual.widgets import MarkdownViewer
 
+from nanb.config import C
+
 
 class HelpScreen(Screen):
     """

@@ -102,6 +102,7 @@ nanb can be configured by adding a toml configuration file in `$HOME/.nanb/nanb.
 ### Default config:
 
 ```
+
 cell_name_max = 20
 
 [keybindings]
@@ -152,6 +153,7 @@ kb_clear_all = "Clear all cells"
 kb_help = "Show this help screen"
 kb_arrows = "Move between cells"
 kb_close_help = "Close the help screen"
+
 ```
 
 
